@@ -7,7 +7,7 @@
 #include "displayDriver.h"
 #include "sensorReader.h"
 
-const char* PROG_VERSION = "v0.1.0";
+const char* PROG_VERSION = "v0.2.0";
 
 //--- Global objects
 static DashboardUi dashboardUi;
