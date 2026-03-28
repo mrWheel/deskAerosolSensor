@@ -15,17 +15,16 @@
 # - The workflow extracts the version from:
 #     <PROGRAM_DIR>/<PROGRAM_SRC>
 #   by searching for a PROG_VERSION line and extracting only:
-#     vX.Y.Z
+#     X.Y.Z (or vX.Y.Z)
 #   from examples like:
 #     const char* PROG_VERSION = "v1.2.3 <and more text ..>";
+#     const char* PROG_VERSION = "1.2.3 <and more text ..>";
 #     const char* PROG_VERSION = v1.2.3 <and more text ..>;
 #
 # Tagging rules
 # - If the extracted version is newer than the latest semver tag in the repo:
 #   - Create and push a Git tag "vX.Y.Z".
-# - If the version change is:
-#   - Major (X increases) OR Minor (Y increases): create a GitHub Release.
-#   - Patch-only (Z increases): create only a tag, no GitHub Release.
+# - If the version change is major, minor, or patch, create/update a GitHub Release.
 #
 # Release-notes rule (important)
 # - When a GitHub Release is created, its body is composed of commit messages
@@ -39,14 +38,15 @@
 #       git log <previousReleaseTag>..HEAD --pretty=format:"- %s"
 #
 # Release retention rules
-# - "Main" releases (vX.0.0) are kept for every major.
-# - For each major, only one "minor" release (vX.Y.0 where Y>0) is kept:
-#   - When creating a new minor release v3.3.0, it deletes GitHub Releases
-#     v3.1.0 and v3.2.0 (if they exist), but keeps all tags.
-# - When creating a new major release v4.0.0, it deletes all minor releases
-#   from older majors (e.g. deletes v3.2.0 release), but keeps tags.
-# - Patch releases are not created by this workflow. If patch releases exist
-#   for some reason, this workflow leaves them untouched.
+# - When creating a new patch release vX.Y.Z (Z increases):
+#   - Create/update the release.
+# - When creating a new minor release vX.Y.0 (Y increases):
+#   - Delete patch releases from the previous minor vX.(Y-1).Z where Z>0.
+#   - Keep tags untouched.
+# - When creating a new major release vX.0.0 (X increases):
+#   - Delete minor/patch releases from previous major v(X-1).*.*,
+#     except v(X-1).0.0.
+#   - Keep tags untouched.
 #
 # Required repository settings
 # - Settings -> Actions -> General -> Workflow permissions:
@@ -84,21 +84,30 @@ jobs:
         run: |
           sourceFile="${{ env.PROGRAM_DIR }}/${{ env.PROGRAM_SRC }}"
           versionLine=$(grep -m1 'PROG_VERSION' "$sourceFile" || true)
-          version=$(echo "$versionLine" | grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)
+          rawVersion=$(echo "$versionLine" | grep -Eo 'v?[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)
+          rawVersion="${rawVersion#v}"
+          version=""
           parseError=""
+
+          if [ -n "$rawVersion" ]; then
+            version="v$rawVersion"
+          fi
 
           if [ -z "$versionLine" ]; then
             parseError="No PROG_VERSION line found in $sourceFile."
           elif [ -z "$version" ]; then
-            parseError="PROG_VERSION line found, but no semantic version (vX.Y.Z) was detected."
+            parseError="PROG_VERSION line found, but no semantic version (X.Y.Z or vX.Y.Z) was detected."
           fi
 
           echo "Detected PROG_VERSION line: $versionLine"
+          echo "Extracted display version: $rawVersion"
           echo "Extracted tag version: $version"
           if [ -n "$parseError" ]; then
             echo "::error::$parseError"
           fi
 
+          echo "VERSION_RAW=$rawVersion" >> $GITHUB_OUTPUT
+          echo "VERSION_RAW=$rawVersion" >> $GITHUB_ENV
           echo "VERSION=$version" >> $GITHUB_OUTPUT
           echo "VERSION=$version" >> $GITHUB_ENV
           echo "VERSION_PARSE_ERROR=$parseError" >> $GITHUB_OUTPUT
@@ -139,6 +148,7 @@ jobs:
             echo "No existing tag found. Proceeding."
             echo "PROCEED=true" >> $GITHUB_ENV
             echo "MAKE_RELEASE=true" >> $GITHUB_ENV
+            echo "RELEASE_KIND=initial" >> $GITHUB_ENV
           elif [ "$version" = "$latest" ]; then
             echo "::warning::Version $version already exists. Skipping."
             echo "PROCEED=false" >> $GITHUB_ENV
@@ -148,24 +158,26 @@ jobs:
           else
             echo "Version $version is newer than $latest. Proceeding."
             echo "PROCEED=true" >> $GITHUB_ENV
+            echo "MAKE_RELEASE=true" >> $GITHUB_ENV
 
             versionMajor=$(echo "$version" | sed -E 's/^v([0-9]+)\..*/\1/')
             versionMinor=$(echo "$version" | sed -E 's/^v[0-9]+\.([0-9]+)\..*/\1/')
+            versionPatch=$(echo "$version" | sed -E 's/^v[0-9]+\.[0-9]+\.([0-9]+)$/\1/')
             latestMajor=$(echo "$latest" | sed -E 's/^v([0-9]+)\..*/\1/')
             latestMinor=$(echo "$latest" | sed -E 's/^v[0-9]+\.([0-9]+)\..*/\1/')
+            latestPatch=$(echo "$latest" | sed -E 's/^v[0-9]+\.[0-9]+\.([0-9]+)$/\1/')
 
-            echo "Parsed version: $versionMajor.$versionMinor, latest: $latestMajor.$latestMinor"
+            echo "Parsed version: $versionMajor.$versionMinor.$versionPatch, latest: $latestMajor.$latestMinor.$latestPatch"
 
-            # Treat major 0 as "always release" (SemVer: 0.y.z is unstable; any bump can be breaking)
-            if [ "$versionMajor" -eq 0 ]; then
-              echo "Major is 0. Any new version under v0.*.* will create a GitHub Release."
-              echo "MAKE_RELEASE=true" >> $GITHUB_ENV
-            elif [ "$versionMajor" -gt "$latestMajor" ] || [ "$versionMajor" -eq "$latestMajor" -a "$versionMinor" -gt "$latestMinor" ]; then
-              echo "Major or minor version changed. A GitHub Release will be created."
-              echo "MAKE_RELEASE=true" >> $GITHUB_ENV
+            if [ "$versionMajor" -gt "$latestMajor" ]; then
+              echo "Detected major bump."
+              echo "RELEASE_KIND=major" >> $GITHUB_ENV
+            elif [ "$versionMinor" -gt "$latestMinor" ]; then
+              echo "Detected minor bump."
+              echo "RELEASE_KIND=minor" >> $GITHUB_ENV
             else
-              echo "Only patch version changed. Only a tag will be created."
-              echo "MAKE_RELEASE=false" >> $GITHUB_ENV
+              echo "Detected patch bump."
+              echo "RELEASE_KIND=patch" >> $GITHUB_ENV
             fi
           fi
 
@@ -215,7 +227,7 @@ jobs:
           echo "PREVIOUS_RELEASE_TAG=$previousReleaseTag" >> $GITHUB_OUTPUT
           echo "PREVIOUS_RELEASE_TAG=$previousReleaseTag" >> $GITHUB_ENV
 
-      - name: Cleanup old minor releases (keep tags)
+      - name: Cleanup outdated releases (keep tags)
         if: env.MAKE_RELEASE == 'true' && env.PROCEED == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -223,27 +235,20 @@ jobs:
           set -euo pipefail
 
           version="${{ env.VERSION }}"
+          releaseKind="${{ env.RELEASE_KIND }}"
           repo="${GITHUB_REPOSITORY}"
 
           versionMajor=$(echo "$version" | sed -E 's/^v([0-9]+)\..*/\1/')
           versionMinor=$(echo "$version" | sed -E 's/^v[0-9]+\.([0-9]+)\..*/\1/')
-          versionPatch=$(echo "$version" | sed -E 's/^v[0-9]+\.[0-9]+\.([0-9]+)$/\1/')
+          previousMajor=$((versionMajor - 1))
+          previousMinor=$((versionMinor - 1))
 
-          isMajorRelease=false
-          isMinorRelease=false
+          echo "Current version is $version (major=$versionMajor minor=$versionMinor, kind=$releaseKind)"
 
-          if [ "$versionMinor" -eq 0 ] && [ "$versionPatch" -eq 0 ]; then
-            isMajorRelease=true
-          elif [ "$versionMinor" -gt 0 ] && [ "$versionPatch" -eq 0 ]; then
-            isMinorRelease=true
-          fi
-
-          echo "Current version is $version (major=$versionMajor minor=$versionMinor patch=$versionPatch)"
-          echo "Major release: $isMajorRelease"
-          echo "Minor release: $isMinorRelease"
-
-          if [ "$isMajorRelease" = "false" ] && [ "$isMinorRelease" = "false" ]; then
-            echo "This is not a major/minor .0 release. No cleanup needed."
+          if [ "$releaseKind" = "patch" ] || [ "$releaseKind" = "initial" ]; then
+            echo "No cleanup needed for release kind '$releaseKind'."
+            echo "DELETED_RELEASE_START_TAG=" >> $GITHUB_OUTPUT
+            echo "DELETED_RELEASE_START_TAG=" >> $GITHUB_ENV
             exit 0
           fi
 
@@ -256,29 +261,34 @@ jobs:
           echo "Fetched $releaseCount releases."
 
           releaseIdsToDelete=()
+          deletedReleaseTags=()
 
-          if [ "$isMajorRelease" = "true" ]; then
-            echo "Deleting minor releases from older majors."
+          if [ "$releaseKind" = "major" ]; then
+            echo "Deleting minor/patch releases from previous major v$previousMajor.*.* (keeping v$previousMajor.0.0)."
             while IFS=$'\t' read -r tagName releaseId; do
-              if [[ "$tagName" =~ ^v([0-9]+)\.([0-9]+)\.0$ ]]; then
+              if [[ "$tagName" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
                 tagMajor="${BASH_REMATCH[1]}"
                 tagMinor="${BASH_REMATCH[2]}"
-                if [ "$tagMinor" -gt 0 ] && [ "$tagMajor" -lt "$versionMajor" ]; then
+                tagPatch="${BASH_REMATCH[3]}"
+                if [ "$tagMajor" -eq "$previousMajor" ] && ! { [ "$tagMinor" -eq 0 ] && [ "$tagPatch" -eq 0 ]; }; then
                   echo "Scheduled for deletion: release tag $tagName (releaseId=$releaseId)"
                   releaseIdsToDelete+=("$releaseId")
+                  deletedReleaseTags+=("$tagName")
                 fi
               fi
             done < <(echo "$releasesJson" | jq -r '.[] | [.tag_name, .id] | @tsv')
 
-          elif [ "$isMinorRelease" = "true" ]; then
-            echo "Deleting older minor releases within the same major."
+          elif [ "$releaseKind" = "minor" ]; then
+            echo "Deleting patch releases from previous minor v$versionMajor.$previousMinor.Z (Z>0)."
             while IFS=$'\t' read -r tagName releaseId; do
-              if [[ "$tagName" =~ ^v([0-9]+)\.([0-9]+)\.0$ ]]; then
+              if [[ "$tagName" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
                 tagMajor="${BASH_REMATCH[1]}"
                 tagMinor="${BASH_REMATCH[2]}"
-                if [ "$tagMajor" -eq "$versionMajor" ] && [ "$tagMinor" -gt 0 ] && [ "$tagMinor" -lt "$versionMinor" ]; then
+                tagPatch="${BASH_REMATCH[3]}"
+                if [ "$tagMajor" -eq "$versionMajor" ] && [ "$tagMinor" -eq "$previousMinor" ] && [ "$tagPatch" -gt 0 ]; then
                   echo "Scheduled for deletion: release tag $tagName (releaseId=$releaseId)"
                   releaseIdsToDelete+=("$releaseId")
+                  deletedReleaseTags+=("$tagName")
                 fi
               fi
             done < <(echo "$releasesJson" | jq -r '.[] | [.tag_name, .id] | @tsv')
@@ -286,8 +296,15 @@ jobs:
 
           if [ "${#releaseIdsToDelete[@]}" -eq 0 ]; then
             echo "No releases matched the cleanup rules."
+            echo "DELETED_RELEASE_START_TAG=" >> $GITHUB_OUTPUT
+            echo "DELETED_RELEASE_START_TAG=" >> $GITHUB_ENV
             exit 0
           fi
+
+          deletedStartTag=$(printf '%s\n' "${deletedReleaseTags[@]}" | sort -V | head -n 1 || true)
+          echo "Earliest deleted release tag: $deletedStartTag"
+          echo "DELETED_RELEASE_START_TAG=$deletedStartTag" >> $GITHUB_OUTPUT
+          echo "DELETED_RELEASE_START_TAG=$deletedStartTag" >> $GITHUB_ENV
 
           for releaseId in "${releaseIdsToDelete[@]}"; do
             echo "Deleting GitHub Release id=$releaseId (tags will be kept)."
@@ -306,14 +323,25 @@ jobs:
           set -euo pipefail
 
           version="${{ env.VERSION }}"
+          versionRaw="${{ env.VERSION_RAW }}"
           previousReleaseTag="${{ env.PREVIOUS_RELEASE_TAG }}"
+          deletedReleaseStartTag="${{ env.DELETED_RELEASE_START_TAG }}"
+          baseTag=""
 
-          echo "Generating release notes for $version"
+          echo "Generating release notes for $version (display: $versionRaw)"
           echo "## Changes" > release_notes.txt
           echo "" >> release_notes.txt
 
-          if [ -z "$previousReleaseTag" ]; then
-            echo "No previous GitHub Release tag found. Including recent commits (max 20)."
+          if [ -n "$deletedReleaseStartTag" ]; then
+            baseTag="$deletedReleaseStartTag"
+            echo "Using earliest deleted release tag as base: $baseTag"
+          elif [ -n "$previousReleaseTag" ]; then
+            baseTag="$previousReleaseTag"
+            echo "Using previous release tag as base: $baseTag"
+          fi
+
+          if [ -z "$baseTag" ]; then
+            echo "No base release tag found. Including recent commits (max 20)."
             git log --pretty=format:"- %s" | head -n 20 > commits.txt
             echo "" >> release_notes.txt
             if [ -s commits.txt ]; then
@@ -324,14 +352,14 @@ jobs:
             echo "" >> release_notes.txt
             echo "_First release._" >> release_notes.txt
           else
-            echo "Including commits since previous GitHub Release tag $previousReleaseTag."
-            echo "### Changes since $previousReleaseTag" >> release_notes.txt
+            echo "Including commits since $baseTag."
+            echo "### Changes since $baseTag" >> release_notes.txt
             echo "" >> release_notes.txt
-            git log ${previousReleaseTag}..HEAD --pretty=format:"- %s" > commits.txt
+            git log ${baseTag}..HEAD --pretty=format:"- %s" > commits.txt
             if [ -s commits.txt ]; then
               cat commits.txt >> release_notes.txt
             else
-              echo "- No commit messages found since $previousReleaseTag." >> release_notes.txt
+              echo "- No commit messages found since $baseTag." >> release_notes.txt
             fi
           fi
 
@@ -353,16 +381,17 @@ jobs:
           set -euo pipefail
 
           repo="${GITHUB_REPOSITORY}"
-          version="${{ env.VERSION }}"
-          releaseName="Release $version"
+          versionTag="${{ env.VERSION }}"
+          versionRaw="${{ env.VERSION_RAW }}"
+          releaseName="Release $versionRaw"
           releaseBody=$(cat release_notes.txt)
 
-          echo "Creating/updating GitHub Release for tag $version"
+          echo "Creating/updating GitHub Release for tag $versionTag"
 
           statusCode=$(curl -sS -o current_release.json -w "%{http_code}" \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/$repo/releases/tags/$version")
+            "https://api.github.com/repos/$repo/releases/tags/$versionTag")
 
           if [ "$statusCode" = "200" ]; then
             releaseId=$(jq -r '.id' current_release.json)
@@ -381,7 +410,7 @@ jobs:
             echo "Updated existing GitHub Release id=$releaseId"
           elif [ "$statusCode" = "404" ]; then
             payload=$(jq -n \
-              --arg tag "$version" \
+              --arg tag "$versionTag" \
               --arg name "$releaseName" \
               --arg body "$releaseBody" \
               '{tag_name: $tag, name: $name, body: $body, draft: false, prerelease: false}')
@@ -393,9 +422,9 @@ jobs:
               "https://api.github.com/repos/$repo/releases" \
               -d "$payload" >/dev/null
 
-            echo "Created new GitHub Release for $version"
+            echo "Created new GitHub Release for $versionTag"
           else
-            echo "::error::Failed to query release by tag $version (HTTP $statusCode)."
+            echo "::error::Failed to query release by tag $versionTag (HTTP $statusCode)."
             cat current_release.json
             exit 1
           fi
