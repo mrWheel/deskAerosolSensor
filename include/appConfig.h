@@ -17,7 +17,11 @@ static constexpr uint8_t kSen66I2cAddress = 0x6B;
 
 //--- Dashboard timing
 static constexpr uint32_t kSensorWarmupMs = 2000;
-static constexpr uint32_t kSensorUpdateIntervalMs = 2000;
+
+#ifndef UPDATE_INTERVAL
+#define UPDATE_INTERVAL 5000
+#endif
+static constexpr uint32_t kSensorUpdateIntervalMs = static_cast<uint32_t>(UPDATE_INTERVAL);
 
 //--- Display configuration
 #ifndef CYD_LCD_ROTATION

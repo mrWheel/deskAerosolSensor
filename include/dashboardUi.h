@@ -11,6 +11,7 @@ public:
   void showBooting();
   void showSensorData(const SensorData& data);
   void showReadError(const char* errorText);
+  void showSensorError(const char* errorText);
   void setStatusText(const char* statusText);
   void setLastUpdateText(const char* updateText);
 

@@ -77,6 +77,24 @@ void DashboardUi::showReadError(const char* errorText)
 
 }   //   showReadError()
 
+//--- Show a sensor communication error on all tiles
+void DashboardUi::showSensorError(const char* errorText)
+{
+  setStatusText(errorText);
+
+  const float maxBadness = 1.0f;
+  setTileValue(tilePm1,  "ERR", "", maxBadness);
+  setTileValue(tilePm25, "ERR", "", maxBadness);
+  setTileValue(tilePm4,  "ERR", "", maxBadness);
+  setTileValue(tilePm10, "ERR", "", maxBadness);
+  setTileValue(tileTemp, "ERR", "", maxBadness);
+  setTileValue(tileRh,   "ERR", "", maxBadness);
+  setTileValue(tileCo2,  "ERR", "", maxBadness);
+  setTileValue(tileVoc,  "ERR", "", maxBadness);
+  setTileValue(tileNox,  "ERR", "", maxBadness);
+
+}   //   showSensorError()
+
 //--- Update the small status label in the header
 void DashboardUi::setStatusText(const char* statusText)
 {

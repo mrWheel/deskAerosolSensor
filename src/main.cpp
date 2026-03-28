@@ -39,7 +39,7 @@ static void updateSimulationUi()
   static uint32_t updateCounter = 0;
   const uint32_t now = millis();
 
-  if ((now - lastUpdateMs) < 1000)
+  if ((now - lastUpdateMs) < kSensorUpdateIntervalMs)
   {
     return;
   }
@@ -112,7 +112,15 @@ static void logStep(uint8_t step, const char* text)
 static void updateLastUpdateText(uint32_t ageMs)
 {
   char buffer[64];
-  snprintf(buffer, sizeof(buffer), "Last update %lu ms ago", static_cast<unsigned long>(ageMs));
+  const uint32_t ageSec = ageMs / 1000;
+  if (ageSec == 0)
+  {
+    snprintf(buffer, sizeof(buffer), "Just updated");
+  }
+  else
+  {
+    snprintf(buffer, sizeof(buffer), "Updated %lu s ago", static_cast<unsigned long>(ageSec));
+  }
   dashboardUi.setLastUpdateText(buffer);
 
 }   //   updateLastUpdateText()
@@ -131,7 +139,7 @@ static void updateSensorOfflineStatus(uint32_t now)
   const uint32_t retryInSeconds = (retryInMs + 999) / 1000;
   char buffer[64];
   snprintf(buffer, sizeof(buffer), "Sensor offline, retry in %lu s", static_cast<unsigned long>(retryInSeconds));
-  dashboardUi.setStatusText("No SEN66 connected");
+  dashboardUi.showSensorError("No SEN66 connected");
   dashboardUi.setLastUpdateText(buffer);
 
 }   //   updateSensorOfflineStatus()
@@ -217,7 +225,7 @@ static void updateSensorAndUi()
 
   if (!sensorReader.read(sensorData))
   {
-    dashboardUi.showReadError("Read retry");
+    dashboardUi.showSensorError("I2C read failed");
     return;
   }
 

@@ -64,4 +64,4 @@ Examples:
 - Hum
 - NOx
 
-Tile value colors move from cooler to warmer tones as badness increases.
+Tile value colors move from cooler (blue) to warmer tones (red) as badness increases.
