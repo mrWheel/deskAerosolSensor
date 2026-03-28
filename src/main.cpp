@@ -2,23 +2,220 @@
 #include <Wire.h>
 #include <lvgl.h>
 #include <math.h>
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <PubSubClient.h>
 #include "appConfig.h"
 #include "dashboardUi.h"
 #include "displayDriver.h"
 #include "sensorReader.h"
+#include "WiFiManagerExt.h"
 
-const char* PROG_VERSION = "v0.2.0";
+const char* PROG_VERSION = "v0.4.0";
 
 //--- Global objects
 static DashboardUi dashboardUi;
 static DisplayDriver displayDriver;
 static SensorReader sensorReader;
+static WiFiManagerExt wifiManagerExt;
 static SensorData sensorData = {};
 static bool sensorOnline = false;
+static bool mqttEnabled = false;
+static bool wifiReady = false;
+static bool tilesVisible = false;
 static uint32_t sensorStartMs = 0;
 static uint32_t lastSensorReadMs = 0;
 static uint32_t lastSensorRetryMs = 0;
+static uint32_t lastMqttConnectTryMs = 0;
+static uint32_t lastMqttPublishMs = 0;
 static constexpr uint32_t kSensorRetryIntervalMs = 5000;
+static constexpr uint32_t kMqttRetryIntervalMs = 5000;
+
+static WiFiClient mqttClientPlain;
+static WiFiClientSecure mqttClientSecure;
+static PubSubClient mqttClient(mqttClientPlain);
+
+//--- Update the dashboard when WiFi manager opens the captive portal
+static void onPortalStatus(const char* statusText, const char* detailText)
+{
+  const bool portalActive = (statusText != nullptr) && (strstr(statusText, "portal") != nullptr);
+  const char* line2 = portalActive ? "Open 192.168.4.1 for portal" : "";
+  dashboardUi.showFullScreenMessage(statusText, detailText, line2);
+  displayDriver.loop();
+  delay(20);
+}
+
+//--- Keep LVGL active while a full-screen status message should remain visible
+static void showTransientStatusScreen(const char* titleText, const char* line1Text, const char* line2Text, uint32_t holdMs)
+{
+  dashboardUi.showFullScreenMessage(titleText, line1Text, line2Text);
+  const uint32_t startMs = millis();
+  while ((millis() - startMs) < holdMs)
+  {
+    displayDriver.loop();
+    wifiManagerExt.loop();
+    delay(5);
+  }
+}
+
+//--- Create a stable MQTT client id from the chip MAC
+static String buildMqttClientId()
+{
+  uint8_t mac[6] = {0};
+  WiFi.macAddress(mac);
+
+  char clientId[32];
+  snprintf(
+    clientId,
+    sizeof(clientId),
+    "deskAerosol-%02x%02x%02x",
+    static_cast<unsigned int>(mac[3]),
+    static_cast<unsigned int>(mac[4]),
+    static_cast<unsigned int>(mac[5])
+  );
+  return String(clientId);
+}
+
+//--- Configure the MQTT transport and endpoint based on stored portal settings
+static void configureMqttEndpoint()
+{
+  const MqttRuntimeConfig& cfg = wifiManagerExt.mqttConfig();
+  const bool useTls = (cfg.brokerPort == 8883);
+
+  if (useTls)
+  {
+    mqttClientSecure.setInsecure();
+    mqttClient.setClient(mqttClientSecure);
+  }
+  else
+  {
+    mqttClient.setClient(mqttClientPlain);
+  }
+
+  mqttClient.setServer(cfg.brokerUrl.c_str(), cfg.brokerPort);
+}
+
+//--- Keep the MQTT connection alive with periodic reconnect attempts
+static void maintainMqttConnection(uint32_t now)
+{
+  if (!mqttEnabled)
+  {
+    return;
+  }
+
+  if (!wifiManagerExt.isWifiConnected())
+  {
+    return;
+  }
+
+  if (mqttClient.connected())
+  {
+    return;
+  }
+
+  if ((now - lastMqttConnectTryMs) < kMqttRetryIntervalMs)
+  {
+    return;
+  }
+
+  lastMqttConnectTryMs = now;
+  const MqttRuntimeConfig& cfg = wifiManagerExt.mqttConfig();
+  const String clientId = buildMqttClientId();
+
+  bool connected = false;
+  if (cfg.username.length() == 0)
+  {
+    connected = mqttClient.connect(clientId.c_str());
+  }
+  else
+  {
+    connected = mqttClient.connect(clientId.c_str(), cfg.username.c_str(), cfg.password.c_str());
+  }
+
+  if (connected)
+  {
+    Serial.println("MQTT connected");
+    return;
+  }
+
+  Serial.printf("MQTT connect failed (state=%d)\n", mqttClient.state());
+}
+
+//--- Publish one sensor sample in JSON format to the configured MQTT topic
+static void publishMqttSampleIfDue(const SensorData& data, uint32_t now)
+{
+  if (!mqttEnabled || !data.valid)
+  {
+    return;
+  }
+
+  const MqttRuntimeConfig& cfg = wifiManagerExt.mqttConfig();
+  if ((now - lastMqttPublishMs) < cfg.publishIntervalMs)
+  {
+    return;
+  }
+
+  if (!mqttClient.connected())
+  {
+    return;
+  }
+
+  char payload[320];
+  snprintf(
+    payload,
+    sizeof(payload),
+    "{\"pm1_0\":%.1f,\"pm2_5\":%.1f,\"pm4_0\":%.1f,\"pm10\":%.1f,\"humidity\":%.1f,\"temperature\":%.1f,\"voc\":%.0f,\"nox\":%.0f,\"co2\":%u,\"ts_ms\":%lu}",
+    data.pm1p0,
+    data.pm2p5,
+    data.pm4p0,
+    data.pm10p0,
+    data.humidity,
+    data.temperature,
+    data.vocIndex,
+    data.noxIndex,
+    static_cast<unsigned int>(data.co2),
+    static_cast<unsigned long>(now)
+  );
+
+  if (mqttClient.publish(cfg.topic.c_str(), payload))
+  {
+    lastMqttPublishMs = now;
+  }
+}
+
+//--- Initialize WiFi (saved AP or portal) and prepare MQTT connectivity
+static bool initConnectivity()
+{
+  wifiManagerExt.setPortalStatusCallback(onPortalStatus);
+  dashboardUi.showFullScreenMessage("WiFi setup", "Trying saved credentials...", "");
+  displayDriver.loop();
+
+  if (!wifiManagerExt.beginAndConnect())
+  {
+    dashboardUi.showFullScreenMessage("WiFi failed", "No credentials or no AP connection", "Portal timeout after 5 minutes");
+    mqttEnabled = false;
+    return false;
+  }
+
+  const String hostName = wifiManagerExt.portalSsidString();
+  const String ipText = String("IP: ") + wifiManagerExt.localIpString();
+  showTransientStatusScreen("WiFi connected", hostName.c_str(), ipText.c_str(), 2500);
+
+  const MqttRuntimeConfig& cfg = wifiManagerExt.mqttConfig();
+  const bool mqttConfigValid = (cfg.brokerUrl.length() > 0) && (cfg.topic.length() > 0);
+
+  if (!mqttConfigValid)
+  {
+    dashboardUi.showFullScreenMessage("WiFi only mode", "MQTT is not configured", "Sensor dashboard will continue");
+    displayDriver.loop();
+    mqttEnabled = false;
+    return true;
+  }
+
+  configureMqttEndpoint();
+  mqttEnabled = true;
+  return true;
+}
 
 //--- Generate a 0..1 triangle wave from a monotonically increasing phase
 static float triangle01(float phase)
@@ -198,8 +395,9 @@ static void updateSensorAndUi()
 
     sensorStartMs = now;
     lastSensorReadMs = now;
-    dashboardUi.setStatusText("SEN66 connected");
-    dashboardUi.setLastUpdateText("Warming up sensor");
+    tilesVisible = false;
+    const String ipLine = String("IP: ") + wifiManagerExt.localIpString();
+    dashboardUi.showFullScreenMessage("Warming up SEN66", ipLine.c_str(), "30 s remaining");
     Serial.println("SEN66 connected after retry");
     return;
   }
@@ -207,9 +405,21 @@ static void updateSensorAndUi()
   if ((now - sensorStartMs) < kSensorWarmupMs)
   {
     setPhase(RuntimePhase::Warmup, "Sensor warmup");
-    dashboardUi.setStatusText("Warming up");
-    updateLastUpdateText(now - sensorStartMs);
+    const uint32_t elapsedMs = now - sensorStartMs;
+    const uint32_t remainingMs = (elapsedMs < kSensorWarmupMs) ? (kSensorWarmupMs - elapsedMs) : 0;
+    const uint32_t remainingSec = (remainingMs + 999) / 1000;
+
+    const String ipLine = String("IP: ") + wifiManagerExt.localIpString();
+    char line2[32];
+    snprintf(line2, sizeof(line2), "%lu s remaining", static_cast<unsigned long>(remainingSec));
+    dashboardUi.showFullScreenMessage("Warming up SEN66", ipLine.c_str(), line2);
     return;
+  }
+
+  if (!tilesVisible)
+  {
+    tilesVisible = true;
+    dashboardUi.showBooting();
   }
 
   if ((now - lastSensorReadMs) < kSensorUpdateIntervalMs)
@@ -232,6 +442,7 @@ static void updateSensorAndUi()
   logSensorData(sensorData);
   dashboardUi.showSensorData(sensorData);
   updateLastUpdateText(0);
+  publishMqttSampleIfDue(sensorData, now);
 
 }   //   updateSensorAndUi()
 
@@ -313,11 +524,23 @@ void setup()
 #endif
 
   logStep(5, "Mode FULL_RUNTIME");
-  dashboardUi.showBooting();
-  logStep(6, "Boot screen rendered");
-  logStep(7, "Initialize sensor");
+  dashboardUi.showFullScreenMessage("Starting", "Preparing connectivity...", "");
+  logStep(6, "WiFi status screen rendered");
+  logStep(7, "Initialize WiFi + MQTT");
+  wifiReady = initConnectivity();
+
+  if (!wifiReady)
+  {
+    logStep(8, "WiFi not connected, waiting on status screen");
+    return;
+  }
+
+  const String ipLine = String("IP: ") + wifiManagerExt.localIpString();
+  dashboardUi.showFullScreenMessage("Warming up SEN66", ipLine.c_str(), "30 s remaining");
+  logStep(8, "Warmup screen rendered");
+  logStep(9, "Initialize sensor");
   initSensor();
-  logStep(8, "Sensor init completed");
+  logStep(10, "Sensor init completed");
 
 }   //   setup()
 
@@ -332,12 +555,24 @@ void loop()
 
 #if defined(SIMULATION)
   displayDriver.loop();
+  wifiManagerExt.loop();
   updateSimulationUi();
   delay(5);
   return;
 #endif
 
+  if (!wifiReady)
+  {
+    displayDriver.loop();
+    wifiManagerExt.loop();
+    delay(5);
+    return;
+  }
+
   displayDriver.loop();
+  wifiManagerExt.loop();
+  maintainMqttConnection(millis());
+  mqttClient.loop();
   updateSensorAndUi();
   delay(5);
 

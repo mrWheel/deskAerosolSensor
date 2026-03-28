@@ -9,6 +9,8 @@ class DashboardUi
 public:
   void begin();
   void showBooting();
+  void showFullScreenMessage(const char* titleText, const char* line1Text, const char* line2Text = "");
+  void hideFullScreenMessage();
   void showSensorData(const SensorData& data);
   void showReadError(const char* errorText);
   void showSensorError(const char* errorText);
@@ -30,6 +32,10 @@ private:
   lv_obj_t* statusLabel = nullptr;
   lv_obj_t* lastUpdateLabel = nullptr;
   lv_obj_t* grid = nullptr;
+  lv_obj_t* fullScreenLayer = nullptr;
+  lv_obj_t* fullScreenTitle = nullptr;
+  lv_obj_t* fullScreenLine1 = nullptr;
+  lv_obj_t* fullScreenLine2 = nullptr;
 
   Tile tilePm1;
   Tile tilePm25;

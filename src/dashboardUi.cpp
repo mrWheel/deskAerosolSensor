@@ -19,6 +19,8 @@ void DashboardUi::begin()
 //--- Show a booting state before the first valid sample arrives
 void DashboardUi::showBooting()
 {
+  hideFullScreenMessage();
+
   setStatusText("Starting sensor...");
   setLastUpdateText("Waiting for first sample");
 
@@ -34,9 +36,84 @@ void DashboardUi::showBooting()
 
 }   //   showBooting()
 
+//--- Show a full-screen status panel and hide the tile dashboard
+void DashboardUi::showFullScreenMessage(const char* titleText, const char* line1Text, const char* line2Text)
+{
+  if (header != nullptr)
+  {
+    lv_obj_add_flag(header, LV_OBJ_FLAG_HIDDEN);
+  }
+
+  if (grid != nullptr)
+  {
+    lv_obj_add_flag(grid, LV_OBJ_FLAG_HIDDEN);
+  }
+
+  if (fullScreenLayer == nullptr)
+  {
+    fullScreenLayer = lv_obj_create(screen);
+    lv_obj_set_size(fullScreenLayer, lv_pct(100), lv_pct(100));
+    lv_obj_align(fullScreenLayer, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_radius(fullScreenLayer, 0, 0);
+    lv_obj_set_style_border_width(fullScreenLayer, 0, 0);
+    lv_obj_set_style_bg_color(fullScreenLayer, lv_color_hex(0x0B1020), 0);
+    lv_obj_set_style_bg_opa(fullScreenLayer, LV_OPA_COVER, 0);
+    lv_obj_set_style_pad_left(fullScreenLayer, 14, 0);
+    lv_obj_set_style_pad_right(fullScreenLayer, 14, 0);
+    lv_obj_set_style_pad_top(fullScreenLayer, 16, 0);
+    lv_obj_set_style_pad_bottom(fullScreenLayer, 16, 0);
+    lv_obj_set_layout(fullScreenLayer, LV_LAYOUT_FLEX);
+    lv_obj_set_flex_flow(fullScreenLayer, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(fullScreenLayer, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+    fullScreenTitle = lv_label_create(fullScreenLayer);
+    lv_obj_set_width(fullScreenTitle, lv_pct(100));
+    lv_obj_set_style_text_align(fullScreenTitle, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_font(fullScreenTitle, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_color(fullScreenTitle, lv_color_hex(0xF8FAFC), 0);
+
+    fullScreenLine1 = lv_label_create(fullScreenLayer);
+    lv_obj_set_width(fullScreenLine1, lv_pct(100));
+    lv_obj_set_style_text_align(fullScreenLine1, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_font(fullScreenLine1, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(fullScreenLine1, lv_color_hex(0x93C5FD), 0);
+
+    fullScreenLine2 = lv_label_create(fullScreenLayer);
+    lv_obj_set_width(fullScreenLine2, lv_pct(100));
+    lv_obj_set_style_text_align(fullScreenLine2, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_font(fullScreenLine2, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(fullScreenLine2, lv_color_hex(0x94A3B8), 0);
+  }
+
+  lv_obj_clear_flag(fullScreenLayer, LV_OBJ_FLAG_HIDDEN);
+  lv_label_set_text(fullScreenTitle, titleText != nullptr ? titleText : "");
+  lv_label_set_text(fullScreenLine1, line1Text != nullptr ? line1Text : "");
+  lv_label_set_text(fullScreenLine2, line2Text != nullptr ? line2Text : "");
+}
+
+//--- Hide full-screen status panel and show normal dashboard layout
+void DashboardUi::hideFullScreenMessage()
+{
+  if (fullScreenLayer != nullptr)
+  {
+    lv_obj_add_flag(fullScreenLayer, LV_OBJ_FLAG_HIDDEN);
+  }
+
+  if (header != nullptr)
+  {
+    lv_obj_clear_flag(header, LV_OBJ_FLAG_HIDDEN);
+  }
+
+  if (grid != nullptr)
+  {
+    lv_obj_clear_flag(grid, LV_OBJ_FLAG_HIDDEN);
+  }
+}
+
 //--- Update all tiles with a fresh sensor sample
 void DashboardUi::showSensorData(const SensorData& data)
 {
+  hideFullScreenMessage();
   setStatusText("Live");
 
   char buf[16];
@@ -80,6 +157,7 @@ void DashboardUi::showReadError(const char* errorText)
 //--- Show a sensor communication error on all tiles
 void DashboardUi::showSensorError(const char* errorText)
 {
+  hideFullScreenMessage();
   setStatusText(errorText);
 
   const float maxBadness = 1.0f;

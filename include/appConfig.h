@@ -16,7 +16,7 @@ static constexpr uint8_t kI2cSclPin = CYD_I2C_SCL_PIN;
 static constexpr uint8_t kSen66I2cAddress = 0x6B;
 
 //--- Dashboard timing
-static constexpr uint32_t kSensorWarmupMs = 2000;
+static constexpr uint32_t kSensorWarmupMs = 30000;
 
 #ifndef UPDATE_INTERVAL
 #define UPDATE_INTERVAL 5000

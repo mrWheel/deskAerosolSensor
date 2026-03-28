@@ -527,15 +527,15 @@ def ensureProjectMetaDataDefaults(rootDir: Path) -> Path:
         "# your_project_name\n\nDiscription in English\n", encoding="utf-8"
     )
     (metaDataDir / "project_nl.md").write_text(
-        "# your_project_name\n\nBeschrijving van het project in Dutch\n", encoding="utf-8"
+        "# your_project_name\n\nProject description in Dutch\n", encoding="utf-8"
     )
 
     payload = {
         "name": "your_project_name",
-        "long_name_nl": "Langere naam in Dutch",
+        "long_name_nl": "Longer name in Dutch",
         "long_name_en": "longer name in English",
         "description_en": "Discription in English",
-        "description_nl": "Beschrijving van het project in Dutch",
+        "description_nl": "Project description in Dutch",
         "github_url": "https://github.com/mrWheel/",
         "post_url": "https://willem.aandewiel.nl/",
         "image": "thisProject.png",
@@ -981,7 +981,7 @@ def main() -> int:
             try:
                 runCommand(["pio", "run", "-e", env, "-t", "buildfs"], projectPath, logLines)
             except RuntimeError as exc:
-                logLines.append(f"WARN: buildfs niet gelukt voor {env}: {exc}")
+                logLines.append(f"WARN: buildfs failed for {env}: {exc}")
 
         envPartitionsSource = resolveEnvPartitionsSource(
             projectPath,

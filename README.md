@@ -9,7 +9,7 @@ This PlatformIO project targets a CYD style ESP32 board with an ILI9341 display 
   - Uses the calibrated display configuration
   - `UPDATE_INTERVAL=2500` (milliseconds)
   - `SIMULATION` to show simulated data without using the SEN66
-  
+
 - `ili9341_r4`
   - Display validation environment with `TEST_DISPLAY=1`
   - Shows diagnostic pages (color bars, grid, corner markers, info)
@@ -59,6 +59,56 @@ The dashboard still shows human-readable time in seconds in the header.
 - Header status text uses a fixed position block to avoid left/right jumping when line lengths change.
 - The second status line (`Just updated` / `Updated ...`) is tuned to sit close under the first line.
 - The existing vertical line at the right side of each tile (LVGL scrollbar part) follows the same color as the tile value.
+
+## MQTT
+Measured data is published over MQTT.
+
+WiFi is required before MQTT can connect.
+
+At startup the device first tries stored WiFi credentials. If no credentials are stored, or connection fails, it starts the WiFiManager on-demand captive portal (timeout: 5 minutes).
+
+When the portal starts, the UI and serial output show the AP name to connect to:
+
+- `DTS-a1-2b-3c`
+
+Where `a1`, `2b`, and `3c` are the last three bytes of the ESP32 MAC address.
+
+The WiFi/MQTT portal logic is implemented in:
+
+- `WiFiManagerExt.h`
+- `WiFiManagerExt.cpp`
+
+Portal fields:
+
+- MQTT broker URL
+- MQTT username (optional)
+- MQTT password (optional)
+- MQTT broker port (`1883` for plain MQTT, `8883` for TLS)
+- MQTT topic
+- MQTT publish interval (ms)
+
+These values are persisted and shown again as defaults in the portal.
+
+If GPIO0 is held low for longer than 10 seconds, stored WiFi settings are cleared and the device restarts (`ESP.restart()`).
+
+### MQTT payload
+
+Each publish sends one JSON object with the latest sample, for example:
+
+```json
+{
+  "pm1_0": 7.3,
+  "pm2_5": 12.8,
+  "pm4_0": 16.2,
+  "pm10": 22.1,
+  "humidity": 45.6,
+  "temperature": 20.4,
+  "voc": 103,
+  "nox": 84,
+  "co2": 721,
+  "ts_ms": 1234567
+}
+```
 
 ## Build and upload
 
