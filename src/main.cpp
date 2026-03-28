@@ -1,3 +1,4 @@
+/*** Last Changed: 2026-03-28 - 15:51 ***/
 #include <Arduino.h>
 #include <Wire.h>
 #include <lvgl.h>
@@ -12,7 +13,7 @@
 #include "sensorReader.h"
 #include "WiFiManagerExt.h"
 
-const char* PROG_VERSION = "v1.0.0";
+const char* PROG_VERSION = "v1.0.1";
 
 //--- Global objects
 static DashboardUi dashboardUi;
@@ -145,13 +146,12 @@ static String buildMqttClientId()
 
   char clientId[32];
   snprintf(
-    clientId,
-    sizeof(clientId),
-    "deskAerosol-%02x%02x%02x",
-    static_cast<unsigned int>(mac[3]),
-    static_cast<unsigned int>(mac[4]),
-    static_cast<unsigned int>(mac[5])
-  );
+      clientId,
+      sizeof(clientId),
+      "deskAerosol-%02x%02x%02x",
+      static_cast<unsigned int>(mac[3]),
+      static_cast<unsigned int>(mac[4]),
+      static_cast<unsigned int>(mac[5]));
   return String(clientId);
 }
 
@@ -256,20 +256,19 @@ static void publishMqttSampleIfDue(const SensorData& data, uint32_t now)
 
   char payload[320];
   snprintf(
-    payload,
-    sizeof(payload),
-    "{\"pm1_0\":%.1f,\"pm2_5\":%.1f,\"pm4_0\":%.1f,\"pm10\":%.1f,\"humidity\":%.1f,\"temperature\":%.1f,\"voc\":%.0f,\"nox\":%.0f,\"co2\":%u,\"timeStamp\":\"%s\"}",
-    data.pm1p0,
-    data.pm2p5,
-    data.pm4p0,
-    data.pm10p0,
-    data.humidity,
-    data.temperature,
-    data.vocIndex,
-    data.noxIndex,
-    static_cast<unsigned int>(data.co2),
-    timeStamp
-  );
+      payload,
+      sizeof(payload),
+      "{\"pm1_0\":%.1f,\"pm2_5\":%.1f,\"pm4_0\":%.1f,\"pm10\":%.1f,\"humidity\":%.1f,\"temperature\":%.1f,\"voc\":%.0f,\"nox\":%.0f,\"co2\":%u,\"timeStamp\":\"%s\"}",
+      data.pm1p0,
+      data.pm2p5,
+      data.pm4p0,
+      data.pm10p0,
+      data.humidity,
+      data.temperature,
+      data.vocIndex,
+      data.noxIndex,
+      static_cast<unsigned int>(data.co2),
+      timeStamp);
 
   if (mqttClient.publish(cfg.topic.c_str(), payload))
   {
@@ -340,7 +339,7 @@ static float triangle01(float phase)
   }
   return (1.0f - wrapped) * 2.0f;
 
-}   //   triangle01()
+} //   triangle01()
 
 //--- Advance simulated sensor values and push them to the dashboard
 static void updateSimulationUi()
@@ -398,19 +397,18 @@ static void updateSimulationUi()
   if ((updateCounter % 4) == 0)
   {
     Serial.printf(
-      "[STEP 9] SIM #%lu CO2=%u PM2.5=%.1f PM10=%.1f T=%.1f RH=%.1f VOC=%.0f NOx=%.0f\n",
-      static_cast<unsigned long>(updateCounter),
-      static_cast<unsigned int>(sim.co2),
-      sim.pm2p5,
-      sim.pm10p0,
-      sim.temperature,
-      sim.humidity,
-      sim.vocIndex,
-      sim.noxIndex
-    );
+        "[STEP 9] SIM #%lu CO2=%u PM2.5=%.1f PM10=%.1f T=%.1f RH=%.1f VOC=%.0f NOx=%.0f\n",
+        static_cast<unsigned long>(updateCounter),
+        static_cast<unsigned int>(sim.co2),
+        sim.pm2p5,
+        sim.pm10p0,
+        sim.temperature,
+        sim.humidity,
+        sim.vocIndex,
+        sim.noxIndex);
   }
 
-}   //   updateSimulationUi()
+} //   updateSimulationUi()
 
 //--- Print a numbered boot-step message to the serial console
 static void logStep(uint8_t step, const char* text)
@@ -439,7 +437,7 @@ static void updateLastUpdateText(uint32_t ageMs)
   }
   dashboardUi.setLastUpdateText(buffer);
 
-}   //   updateLastUpdateText()
+} //   updateLastUpdateText()
 
 //--- Show sensor-offline status and periodic reconnect information
 static void updateSensorOfflineStatus(uint32_t now)
@@ -458,31 +456,36 @@ static void updateSensorOfflineStatus(uint32_t now)
   dashboardUi.showSensorError("No SEN66 connected");
   dashboardUi.setLastUpdateText(buffer);
 
-}   //   updateSensorOfflineStatus()
+} //   updateSensorOfflineStatus()
 
 //--- Print one full line with all measured values for debugging
 static void logSensorData(const SensorData& data)
 {
   Serial.printf(
-    "PM1=%.1f PM2.5=%.1f PM4=%.1f PM10=%.1f RH=%.1f T=%.1f VOC=%.0f NOx=%.0f CO2=%u\n",
-    data.pm1p0,
-    data.pm2p5,
-    data.pm4p0,
-    data.pm10p0,
-    data.humidity,
-    data.temperature,
-    data.vocIndex,
-    data.noxIndex,
-    static_cast<unsigned int>(data.co2)
-  );
+      "PM1=%.1f PM2.5=%.1f PM4=%.1f PM10=%.1f RH=%.1f T=%.1f VOC=%.0f NOx=%.0f CO2=%u\n",
+      data.pm1p0,
+      data.pm2p5,
+      data.pm4p0,
+      data.pm10p0,
+      data.humidity,
+      data.temperature,
+      data.vocIndex,
+      data.noxIndex,
+      static_cast<unsigned int>(data.co2));
 
-}   //   logSensorData()
+} //   logSensorData()
 
 //--- Perform one timed sensor update and refresh the dashboard
 static void updateSensorAndUi()
 {
   const uint32_t now = millis();
-  enum class RuntimePhase : uint8_t { Offline = 0, Warmup = 1, WaitingNext = 2, Reading = 3 };
+  enum class RuntimePhase : uint8_t
+  {
+    Offline = 0,
+    Warmup = 1,
+    WaitingNext = 2,
+    Reading = 3
+  };
   static RuntimePhase lastPhase = RuntimePhase::Reading;
 
   auto setPhase = [&](RuntimePhase phase, const char* text)
@@ -531,11 +534,10 @@ static void updateSensorAndUi()
 
     char line2[96];
     snprintf(
-      line2,
-      sizeof(line2),
-      "%s\n30 s remaining",
-      ntpLine
-    );
+        line2,
+        sizeof(line2),
+        "%s\n30 s remaining",
+        ntpLine);
 
     dashboardUi.showFullScreenMessage("Warming up SEN66", ipLine.c_str(), line2);
     Serial.println("SEN66 connected after retry");
@@ -564,12 +566,11 @@ static void updateSensorAndUi()
 
     char line2[96];
     snprintf(
-      line2,
-      sizeof(line2),
-      "%s\n%lu s remaining",
-      ntpLine,
-      static_cast<unsigned long>(remainingSec)
-    );
+        line2,
+        sizeof(line2),
+        "%s\n%lu s remaining",
+        ntpLine,
+        static_cast<unsigned long>(remainingSec));
     dashboardUi.showFullScreenMessage("Warming up SEN66", ipLine.c_str(), line2);
     return;
   }
@@ -602,7 +603,7 @@ static void updateSensorAndUi()
   updateLastUpdateText(0);
   publishMqttSampleIfDue(sensorData, now);
 
-}   //   updateSensorAndUi()
+} //   updateSensorAndUi()
 
 //--- Initialize display and build the dashboard screen
 static bool initDisplayAndUi()
@@ -624,7 +625,7 @@ static bool initDisplayAndUi()
 #endif
   return true;
 
-}   //   initDisplayAndUi()
+} //   initDisplayAndUi()
 
 //--- Initialize the external SEN66 sensor on the custom I2C bus
 static void initSensor()
@@ -638,7 +639,7 @@ static void initSensor()
     Serial.println("Warning: SEN66 not detected, dashboard continues without sensor");
   }
 
-}   //   initSensor()
+} //   initSensor()
 
 //--- Arduino setup entry point
 void setup()
@@ -708,18 +709,17 @@ void setup()
 
   char warmupLine2[96];
   snprintf(
-    warmupLine2,
-    sizeof(warmupLine2),
-    "%s\n30 s remaining",
-    ntpLine
-  );
+      warmupLine2,
+      sizeof(warmupLine2),
+      "%s\n30 s remaining",
+      ntpLine);
   dashboardUi.showFullScreenMessage("Warming up SEN66", ipLine.c_str(), warmupLine2);
   logStep(8, "Warmup screen rendered");
   logStep(9, "Initialize sensor");
   initSensor();
   logStep(10, "Sensor init completed");
 
-}   //   setup()
+} //   setup()
 
 //--- Arduino main loop entry point
 void loop()
@@ -755,4 +755,4 @@ void loop()
   updateMqttStatusFlash(millis());
   delay(5);
 
-}   //   loop()
+} //   loop()

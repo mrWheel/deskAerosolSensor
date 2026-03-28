@@ -1,6 +1,6 @@
 # -------------------------------------------------------------------------------
 #
-#-- Version Date: 09-03-2026 -- (dd-mm-eeyy)
+#-- Version Date: 28-03-2026 -- (dd-mm-eeyy)
 #
 # GitHub Actions workflow: Auto tag and manage GitHub Releases based on a version
 # string found in your PlatformIO firmware source file.
@@ -75,7 +75,9 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Get version from ${{ env.PROGRAM_SRC }}
         id: getVersion
@@ -300,6 +302,8 @@ jobs:
         if: env.MAKE_RELEASE == 'true' && env.PROCEED == 'true'
         id: releaseNotes
         run: |
+          set -euo pipefail
+
           version="${{ env.VERSION }}"
           previousReleaseTag="${{ env.PREVIOUS_RELEASE_TAG }}"
 
@@ -309,27 +313,88 @@ jobs:
 
           if [ -z "$previousReleaseTag" ]; then
             echo "No previous GitHub Release tag found. Including recent commits (max 20)."
-            git log --pretty=format:"- %s" | head -n 20 >> release_notes.txt
+            git log --pretty=format:"- %s" | head -n 20 > commits.txt
             echo "" >> release_notes.txt
+            if [ -s commits.txt ]; then
+              cat commits.txt >> release_notes.txt
+            else
+              echo "- No commit messages found." >> release_notes.txt
+            fi
             echo "" >> release_notes.txt
-            echo "_First release_" >> release_notes.txt
+            echo "_First release._" >> release_notes.txt
           else
             echo "Including commits since previous GitHub Release tag $previousReleaseTag."
             echo "### Changes since $previousReleaseTag" >> release_notes.txt
             echo "" >> release_notes.txt
-            git log ${previousReleaseTag}..HEAD --pretty=format:"- %s" >> release_notes.txt
+            git log ${previousReleaseTag}..HEAD --pretty=format:"- %s" > commits.txt
+            if [ -s commits.txt ]; then
+              cat commits.txt >> release_notes.txt
+            else
+              echo "- No commit messages found since $previousReleaseTag." >> release_notes.txt
+            fi
           fi
 
           echo "Release notes file created."
 
-      - name: Create GitHub Release
+      - name: Show generated release notes
         if: env.MAKE_RELEASE == 'true' && env.PROCEED == 'true'
-        uses: actions/create-release@v1
+        run: |
+          echo "Generated release notes (release_notes.txt):"
+          echo "----------------------------------------"
+          cat release_notes.txt
+          echo "----------------------------------------"
+
+      - name: Create or update GitHub Release
+        if: env.MAKE_RELEASE == 'true' && env.PROCEED == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ env.VERSION }}
-          release_name: Release ${{ env.VERSION }}
-          body_path: release_notes.txt
-          draft: false
-          prerelease: false
+        run: |
+          set -euo pipefail
+
+          repo="${GITHUB_REPOSITORY}"
+          version="${{ env.VERSION }}"
+          releaseName="Release $version"
+          releaseBody=$(cat release_notes.txt)
+
+          echo "Creating/updating GitHub Release for tag $version"
+
+          statusCode=$(curl -sS -o current_release.json -w "%{http_code}" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$repo/releases/tags/$version")
+
+          if [ "$statusCode" = "200" ]; then
+            releaseId=$(jq -r '.id' current_release.json)
+            payload=$(jq -n \
+              --arg name "$releaseName" \
+              --arg body "$releaseBody" \
+              '{name: $name, body: $body, draft: false, prerelease: false}')
+
+            curl -sS -X PATCH \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "Content-Type: application/json" \
+              "https://api.github.com/repos/$repo/releases/$releaseId" \
+              -d "$payload" >/dev/null
+
+            echo "Updated existing GitHub Release id=$releaseId"
+          elif [ "$statusCode" = "404" ]; then
+            payload=$(jq -n \
+              --arg tag "$version" \
+              --arg name "$releaseName" \
+              --arg body "$releaseBody" \
+              '{tag_name: $tag, name: $name, body: $body, draft: false, prerelease: false}')
+
+            curl -sS -X POST \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "Content-Type: application/json" \
+              "https://api.github.com/repos/$repo/releases" \
+              -d "$payload" >/dev/null
+
+            echo "Created new GitHub Release for $version"
+          else
+            echo "::error::Failed to query release by tag $version (HTTP $statusCode)."
+            cat current_release.json
+            exit 1
+          fi

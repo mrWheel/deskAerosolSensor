@@ -88,17 +88,18 @@ CPP_DIRS = [
     # "components",
 ]
 
-# Directories where staged *.h files should be updated
-# (headers can also live in src/lib)
+# Mappen waarin we staged *.h willen updaten
+# (headers kunnen ook in src/lib staan)
 H_DIRS = [
     "include",
     "src",
     # "lib",
 ]
 
-# Propagation rules:
-# If a staged modified .cpp is under CPP_DIRS, try to update the matching .h
-# by using the same relative path under these header roots:
+# Propagate-regels:
+# Als een staged gewijzigde .cpp onder CPP_DIRS valt, dan proberen we de bijbehorende .h
+# te updaten door hetzelfde relatieve pad te nemen voor het bijbehorende .h bestand,
+# onder deze header-roots:
 PROPAGATE_HEADER_DIRS = [
     "include",
     # "lib/somelib/include",
@@ -107,7 +108,7 @@ PROPAGATE_HEADER_DIRS = [
 def make_header(now_str: str) -> str:
     return f"/*** Last Changed: {now_str} ***/\n"
 
-# Match only when the header is truly at the top (optional UTF-8 BOM)
+# Match alleen als de header echt bovenaan staat (optioneel met UTF-8 BOM)
 HEADER_AT_TOP_RE = re.compile(r"^(?:\ufeff)?/\*\*\*\s*Last Changed: .*?\*\*\*/\s*\n", re.DOTALL)
 
 # =========================
@@ -134,8 +135,8 @@ def is_under_any_dir(rel_path: Path, dir_list: List[str]) -> bool:
 
 def rel_under_root(rel_path: Path, roots: List[str]) -> Optional[Path]:
     """
-    If rel_path is under one of the roots, return the path relative to that root.
-    Example: rel_path='src/foo/a.cpp' and root='src' => 'foo/a.cpp'
+    Als rel_path onder een van de roots valt, return het pad relatief t.o.v. die root.
+    Bijvoorbeeld: rel_path='src/foo/a.cpp' en root='src' => 'foo/a.cpp'
     """
     s = rel_path.as_posix()
     for r in roots:
@@ -162,15 +163,15 @@ def dedup_paths(paths: List[Path]) -> List[Path]:
 
 def update_file_header(abs_path: Path, header_line: str) -> bool:
     """
-    Set or replace the Last Changed header at the top of the file.
-    Return True when the file was modified.
+    Zet of vervang de Last Changed header bovenaan het bestand.
+    Return True als het bestand is aangepast.
     """
     if not abs_path.exists() or not abs_path.is_file():
         return False
 
     original = abs_path.read_text(encoding="utf-8", errors="replace")
 
-    # preserve BOM when present
+    # behoud BOM als die er is
     bom = "\ufeff" if original.startswith("\ufeff") else ""
     content = original[len(bom):] if bom else original
 
@@ -198,12 +199,12 @@ if res.returncode != 0:
 
 staged_rel = [Path(p) for p in res.stdout.splitlines() if p.strip()]
 
-# Guard: nothing staged -> probably run manually
+# 🔒 Guard: niets staged → waarschijnlijk handmatig gerund
 if not staged_rel:
     print("last-changed: no staged files (this hook runs during commit)", file=sys.stderr)
     raise SystemExit(0)
 
-# Select staged cpp/h based on configured directories
+# Selecteer staged cpp/h op basis van config mappen
 staged_cpp_rel = [
     p for p in staged_rel
     if p.suffix == ".cpp" and is_under_any_dir(p, CPP_DIRS)
@@ -214,7 +215,7 @@ staged_h_rel = [
     if p.suffix == ".h" and is_under_any_dir(p, H_DIRS)
 ]
 
-# Propagate: for each staged modified cpp -> include headers with matching folder structure
+# Propagate: voor elke staged gewijzigde cpp -> include-headers met dezelfde folderstructuur
 propagated_h_rel: List[Path] = []
 
 for cpp_rel in staged_cpp_rel:
@@ -222,10 +223,10 @@ for cpp_rel in staged_cpp_rel:
     if rel_inside_cpp_root is None:
         continue
 
-    # change extension to .h and keep subpath
+    # vervang extensie naar .h, behoud subpad
     rel_h_inside = rel_inside_cpp_root.with_suffix(".h")
 
-    # try exact path under each propagation header root
+    # probeer exact pad onder elke propagate header root
     for hdr_root in PROPAGATE_HEADER_DIRS:
         candidate_rel = Path(hdr_root) / rel_h_inside
         candidate_abs = repo_root / candidate_rel
@@ -235,11 +236,11 @@ for cpp_rel in staged_cpp_rel:
 # Dedup
 targets_rel = dedup_paths(staged_cpp_rel + staged_h_rel + dedup_paths(propagated_h_rel))
 
-# Timestamp (local time)
+# Timestamp (lokale tijd)
 now_str = datetime.datetime.now().strftime("%Y-%m-%d - %H:%M")
 header_line = make_header(now_str)
 
-# Update and stage
+# Update en stage
 for rel_path in targets_rel:
     abs_path = repo_root / rel_path
     if update_file_header(abs_path, header_line):
