@@ -15,6 +15,7 @@ public:
   void showReadError(const char* errorText);
   void showSensorError(const char* errorText);
   void setStatusText(const char* statusText);
+  void setMqttIndicator(bool visible);
   void setLastUpdateText(const char* updateText);
 
 private:
@@ -29,7 +30,9 @@ private:
   lv_obj_t* screen = nullptr;
   lv_obj_t* header = nullptr;
   lv_obj_t* titleLabel = nullptr;
+  lv_obj_t* statusTopRow = nullptr;
   lv_obj_t* statusLabel = nullptr;
+  lv_obj_t* mqttLabel = nullptr;
   lv_obj_t* lastUpdateLabel = nullptr;
   lv_obj_t* grid = nullptr;
   lv_obj_t* fullScreenLayer = nullptr;

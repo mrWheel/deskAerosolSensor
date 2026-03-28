@@ -1,10 +1,17 @@
 # SEN66 Dashboard for CYD ILI9341
 
+<img src="Documents/Sensirion-SEN66.png" width="350">
+
 This PlatformIO project targets a CYD style ESP32 board with an ILI9341 display and a 3x3 LVGL dashboard.
+
+<img src="Documents/liveScreen.png" width="250">
 
 ## Included environments
 
 - `cyd_ili9341`
+
+<img src="Documents/ili9341_ESP32_Board.png" width="250">
+
   - Main runtime environment for ILI9341
   - Uses the calibrated display configuration
   - `UPDATE_INTERVAL=2500` (milliseconds)
@@ -33,6 +40,8 @@ Default I2C pins in `cyd_ili9341`:
 - SEN66 GND -> GND
 - SEN66 SDA -> GPIO27
 - SEN66 SCL -> GPIO22
+
+<img src="Documents/ili9341_ESP32_Board_I2C_Pinout.png" width="250">
 
 Important: on the ILI9341 variant, using GPIO21 for SDA conflicts with the display backlight pin and can make the screen appear black.
 
@@ -87,6 +96,11 @@ Portal fields:
 - MQTT topic
 - MQTT publish interval (ms)
 
+```
+{"pm1_0":0.6,"pm2_5":1.0,"pm4_0":1.3,"pm10":1.5,"humidity":52.6,"temperature":17.7,"voc":68,"nox":1,"co2":1372,"timeStamp":"2026-03-28T15:24:41+0100"}
+{"pm1_0":0.6,"pm2_5":1.0,"pm4_0":1.3,"pm10":1.5,"humidity":52.6,"temperature":17.7,"voc":68,"nox":1,"co2":1371,"timeStamp":"2026-03-28T15:24:51+0100"}
+{"pm1_0":0.6,"pm2_5":1.0,"pm4_0":1.3,"pm10":1.5,"humidity":52.6,"temperature":17.6,"voc":68,"nox":1,"co2":1367,"timeStamp":"2026-03-28T15:25:01+0100"}
+```
 These values are persisted and shown again as defaults in the portal.
 
 If GPIO0 is held low for longer than 10 seconds, stored WiFi settings are cleared and the device restarts (`ESP.restart()`).
@@ -106,7 +120,7 @@ Each publish sends one JSON object with the latest sample, for example:
   "voc": 103,
   "nox": 84,
   "co2": 721,
-  "ts_ms": 1234567
+  "timestamp": 2026-03-28T15:24:41+0100
 }
 ```
 

@@ -183,6 +183,18 @@ void DashboardUi::setStatusText(const char* statusText)
 
 }   //   setStatusText()
 
+//--- Show/hide right-aligned MQTT indicator in the header
+void DashboardUi::setMqttIndicator(bool visible)
+{
+  if (mqttLabel == nullptr)
+  {
+    return;
+  }
+
+  lv_label_set_text(mqttLabel, visible ? "MQTT" : "");
+
+}   //   setMqttIndicator()
+
 //--- Update the last-update label in the header
 void DashboardUi::setLastUpdateText(const char* updateText)
 {
@@ -207,6 +219,7 @@ void DashboardUi::createHeader()
   lv_obj_set_style_pad_right(header, 10, 0);
   lv_obj_set_style_pad_top(header, 6, 0);
   lv_obj_set_style_pad_bottom(header, 6, 0);
+  lv_obj_set_scrollbar_mode(header, LV_SCROLLBAR_MODE_OFF);
   lv_obj_set_layout(header, 0);
 
   titleLabel = lv_label_create(header);
@@ -221,21 +234,36 @@ void DashboardUi::createHeader()
   lv_obj_set_style_bg_opa(rightGroup, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(rightGroup, 0, 0);
   lv_obj_set_style_pad_all(rightGroup, 0, 0);
-  lv_obj_set_style_pad_row(rightGroup, 0, 0);
-  lv_obj_set_layout(rightGroup, LV_LAYOUT_FLEX);
-  lv_obj_set_flex_flow(rightGroup, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_flex_align(rightGroup, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+  lv_obj_set_scrollbar_mode(rightGroup, LV_SCROLLBAR_MODE_OFF);
+  lv_obj_set_layout(rightGroup, 0);
 
-  statusLabel = lv_label_create(rightGroup);
+  statusTopRow = lv_obj_create(rightGroup);
+  lv_obj_set_size(statusTopRow, lv_pct(100), 14);
+  lv_obj_align(statusTopRow, LV_ALIGN_TOP_MID, 0, 0);
+  lv_obj_set_style_bg_opa(statusTopRow, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_border_width(statusTopRow, 0, 0);
+  lv_obj_set_style_pad_all(statusTopRow, 0, 0);
+  lv_obj_set_scrollbar_mode(statusTopRow, LV_SCROLLBAR_MODE_OFF);
+  lv_obj_set_layout(statusTopRow, 0);
+
+  statusLabel = lv_label_create(statusTopRow);
   lv_label_set_text(statusLabel, "Booting");
-  lv_obj_set_width(statusLabel, lv_pct(100));
+  lv_obj_align(statusLabel, LV_ALIGN_LEFT_MID, 0, 0);
   lv_obj_set_style_text_align(statusLabel, LV_TEXT_ALIGN_LEFT, 0);
   lv_obj_set_style_text_font(statusLabel, &lv_font_montserrat_14, 0);
   lv_obj_set_style_text_color(statusLabel, lv_color_hex(0x93C5FD), 0);
 
+  mqttLabel = lv_label_create(statusTopRow);
+  lv_label_set_text(mqttLabel, "");
+  lv_obj_align(mqttLabel, LV_ALIGN_RIGHT_MID, 0, 0);
+  lv_obj_set_style_text_align(mqttLabel, LV_TEXT_ALIGN_RIGHT, 0);
+  lv_obj_set_style_text_font(mqttLabel, &lv_font_montserrat_14, 0);
+  lv_obj_set_style_text_color(mqttLabel, lv_color_hex(0x67E8F9), 0);
+
   lastUpdateLabel = lv_label_create(rightGroup);
   lv_label_set_text(lastUpdateLabel, "Waiting");
   lv_obj_set_width(lastUpdateLabel, lv_pct(100));
+  lv_obj_align(lastUpdateLabel, LV_ALIGN_BOTTOM_MID, 0, 0);
   lv_obj_set_style_text_align(lastUpdateLabel, LV_TEXT_ALIGN_LEFT, 0);
   lv_obj_set_style_text_font(lastUpdateLabel, &lv_font_montserrat_12, 0);
   lv_obj_set_style_text_color(lastUpdateLabel, lv_color_hex(0x94A3B8), 0);

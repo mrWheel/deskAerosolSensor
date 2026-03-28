@@ -2,6 +2,7 @@
 #include <Wire.h>
 #include <lvgl.h>
 #include <math.h>
+#include <time.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
@@ -11,7 +12,7 @@
 #include "sensorReader.h"
 #include "WiFiManagerExt.h"
 
-const char* PROG_VERSION = "v0.4.0";
+const char* PROG_VERSION = "v1.0.0";
 
 //--- Global objects
 static DashboardUi dashboardUi;
@@ -28,12 +29,90 @@ static uint32_t lastSensorReadMs = 0;
 static uint32_t lastSensorRetryMs = 0;
 static uint32_t lastMqttConnectTryMs = 0;
 static uint32_t lastMqttPublishMs = 0;
+static uint32_t lastTimeSyncTryMs = 0;
+static uint32_t mqttStatusFlashUntilMs = 0;
 static constexpr uint32_t kSensorRetryIntervalMs = 5000;
 static constexpr uint32_t kMqttRetryIntervalMs = 5000;
+static constexpr uint32_t kTimeSyncRetryMs = 60000;
+static constexpr uint32_t kMqttStatusFlashMs = 800;
+static bool timeSynced = false;
 
 static WiFiClient mqttClientPlain;
 static WiFiClientSecure mqttClientSecure;
 static PubSubClient mqttClient(mqttClientPlain);
+
+//--- Try to synchronize ESP32 clock over NTP while WiFi is connected
+static bool syncTimeFromNtp()
+{
+  configTzTime("CET-1CEST,M3.5.0/2,M10.5.0/3", "pool.ntp.org", "time.nist.gov", "time.google.com");
+
+  const uint32_t startedMs = millis();
+  while ((millis() - startedMs) < 10000)
+  {
+    if (time(nullptr) > 1700000000)
+    {
+      timeSynced = true;
+      Serial.println("NTP time synchronized");
+      return true;
+    }
+
+    displayDriver.loop();
+    wifiManagerExt.loop();
+    delay(50);
+  }
+
+  timeSynced = false;
+  Serial.println("Warning: NTP time sync failed");
+  return false;
+}
+
+//--- Ensure time sync is retried periodically until successful
+static void ensureTimeSync(uint32_t now)
+{
+  if (!wifiManagerExt.isWifiConnected() || timeSynced)
+  {
+    return;
+  }
+
+  if ((now - lastTimeSyncTryMs) < kTimeSyncRetryMs)
+  {
+    return;
+  }
+
+  lastTimeSyncTryMs = now;
+  syncTimeFromNtp();
+}
+
+//--- Format current local time as ISO8601 (Europe/Amsterdam, with numeric offset)
+static bool makeIsoTimestamp(char* out, size_t outSize)
+{
+  const time_t now = time(nullptr);
+  if (now <= 0)
+  {
+    return false;
+  }
+
+  struct tm localTm;
+  localtime_r(&now, &localTm);
+  return strftime(out, outSize, "%Y-%m-%dT%H:%M:%S%z", &localTm) > 0;
+}
+
+//--- Show MQTT text briefly in the top-right status label on successful publish
+static void updateMqttStatusFlash(uint32_t now)
+{
+  if (mqttStatusFlashUntilMs == 0)
+  {
+    return;
+  }
+
+  if (now < mqttStatusFlashUntilMs)
+  {
+    return;
+  }
+
+  mqttStatusFlashUntilMs = 0;
+  dashboardUi.setMqttIndicator(false);
+}
 
 //--- Update the dashboard when WiFi manager opens the captive portal
 static void onPortalStatus(const char* statusText, const char* detailText)
@@ -160,11 +239,26 @@ static void publishMqttSampleIfDue(const SensorData& data, uint32_t now)
     return;
   }
 
+  if (!timeSynced)
+  {
+    ensureTimeSync(now);
+    if (!timeSynced)
+    {
+      return;
+    }
+  }
+
+  char timeStamp[32];
+  if (!makeIsoTimestamp(timeStamp, sizeof(timeStamp)))
+  {
+    return;
+  }
+
   char payload[320];
   snprintf(
     payload,
     sizeof(payload),
-    "{\"pm1_0\":%.1f,\"pm2_5\":%.1f,\"pm4_0\":%.1f,\"pm10\":%.1f,\"humidity\":%.1f,\"temperature\":%.1f,\"voc\":%.0f,\"nox\":%.0f,\"co2\":%u,\"ts_ms\":%lu}",
+    "{\"pm1_0\":%.1f,\"pm2_5\":%.1f,\"pm4_0\":%.1f,\"pm10\":%.1f,\"humidity\":%.1f,\"temperature\":%.1f,\"voc\":%.0f,\"nox\":%.0f,\"co2\":%u,\"timeStamp\":\"%s\"}",
     data.pm1p0,
     data.pm2p5,
     data.pm4p0,
@@ -174,12 +268,14 @@ static void publishMqttSampleIfDue(const SensorData& data, uint32_t now)
     data.vocIndex,
     data.noxIndex,
     static_cast<unsigned int>(data.co2),
-    static_cast<unsigned long>(now)
+    timeStamp
   );
 
   if (mqttClient.publish(cfg.topic.c_str(), payload))
   {
     lastMqttPublishMs = now;
+    mqttStatusFlashUntilMs = now + kMqttStatusFlashMs;
+    dashboardUi.setMqttIndicator(true);
   }
 }
 
@@ -198,8 +294,25 @@ static bool initConnectivity()
   }
 
   const String hostName = wifiManagerExt.portalSsidString();
-  const String ipText = String("IP: ") + wifiManagerExt.localIpString();
-  showTransientStatusScreen("WiFi connected", hostName.c_str(), ipText.c_str(), 2500);
+  const String ipOnly = wifiManagerExt.localIpString();
+
+  char line2[128];
+  snprintf(line2, sizeof(line2), "IP: %s\nNTP: synchronizing...", ipOnly.c_str());
+  dashboardUi.showFullScreenMessage("WiFi connected", hostName.c_str(), line2);
+  displayDriver.loop();
+
+  syncTimeFromNtp();
+
+  char ntpText[32];
+  if (makeIsoTimestamp(ntpText, sizeof(ntpText)))
+  {
+    snprintf(line2, sizeof(line2), "IP: %s\nNTP: %s", ipOnly.c_str(), ntpText);
+  }
+  else
+  {
+    snprintf(line2, sizeof(line2), "IP: %s\nNTP: unavailable", ipOnly.c_str());
+  }
+  showTransientStatusScreen("WiFi connected", hostName.c_str(), line2, 2500);
 
   const MqttRuntimeConfig& cfg = wifiManagerExt.mqttConfig();
   const bool mqttConfigValid = (cfg.brokerUrl.length() > 0) && (cfg.topic.length() > 0);
@@ -308,15 +421,21 @@ static void logStep(uint8_t step, const char* text)
 //--- Format and display the last-update text
 static void updateLastUpdateText(uint32_t ageMs)
 {
+  (void)ageMs;
   char buffer[64];
-  const uint32_t ageSec = ageMs / 1000;
-  if (ageSec == 0)
+  const time_t now = time(nullptr);
+  if (now > 0)
   {
-    snprintf(buffer, sizeof(buffer), "Just updated");
+    struct tm localTm;
+    localtime_r(&now, &localTm);
+    if (strftime(buffer, sizeof(buffer), "%H:%M:%S", &localTm) == 0)
+    {
+      snprintf(buffer, sizeof(buffer), "Time unavailable");
+    }
   }
   else
   {
-    snprintf(buffer, sizeof(buffer), "Updated %lu s ago", static_cast<unsigned long>(ageSec));
+    snprintf(buffer, sizeof(buffer), "Time not synced");
   }
   dashboardUi.setLastUpdateText(buffer);
 
@@ -397,7 +516,28 @@ static void updateSensorAndUi()
     lastSensorReadMs = now;
     tilesVisible = false;
     const String ipLine = String("IP: ") + wifiManagerExt.localIpString();
-    dashboardUi.showFullScreenMessage("Warming up SEN66", ipLine.c_str(), "30 s remaining");
+
+    char ntpText[32];
+    const bool hasNtp = makeIsoTimestamp(ntpText, sizeof(ntpText));
+    char ntpLine[48];
+    if (hasNtp)
+    {
+      snprintf(ntpLine, sizeof(ntpLine), "NTP: %s", ntpText);
+    }
+    else
+    {
+      snprintf(ntpLine, sizeof(ntpLine), "NTP: synchronizing...");
+    }
+
+    char line2[96];
+    snprintf(
+      line2,
+      sizeof(line2),
+      "%s\n30 s remaining",
+      ntpLine
+    );
+
+    dashboardUi.showFullScreenMessage("Warming up SEN66", ipLine.c_str(), line2);
     Serial.println("SEN66 connected after retry");
     return;
   }
@@ -410,8 +550,26 @@ static void updateSensorAndUi()
     const uint32_t remainingSec = (remainingMs + 999) / 1000;
 
     const String ipLine = String("IP: ") + wifiManagerExt.localIpString();
-    char line2[32];
-    snprintf(line2, sizeof(line2), "%lu s remaining", static_cast<unsigned long>(remainingSec));
+    char ntpText[32];
+    const bool hasNtp = makeIsoTimestamp(ntpText, sizeof(ntpText));
+    char ntpLine[48];
+    if (hasNtp)
+    {
+      snprintf(ntpLine, sizeof(ntpLine), "NTP: %s", ntpText);
+    }
+    else
+    {
+      snprintf(ntpLine, sizeof(ntpLine), "NTP: synchronizing...");
+    }
+
+    char line2[96];
+    snprintf(
+      line2,
+      sizeof(line2),
+      "%s\n%lu s remaining",
+      ntpLine,
+      static_cast<unsigned long>(remainingSec)
+    );
     dashboardUi.showFullScreenMessage("Warming up SEN66", ipLine.c_str(), line2);
     return;
   }
@@ -536,7 +694,26 @@ void setup()
   }
 
   const String ipLine = String("IP: ") + wifiManagerExt.localIpString();
-  dashboardUi.showFullScreenMessage("Warming up SEN66", ipLine.c_str(), "30 s remaining");
+  char ntpText[32];
+  const bool hasNtp = makeIsoTimestamp(ntpText, sizeof(ntpText));
+  char ntpLine[48];
+  if (hasNtp)
+  {
+    snprintf(ntpLine, sizeof(ntpLine), "NTP: %s", ntpText);
+  }
+  else
+  {
+    snprintf(ntpLine, sizeof(ntpLine), "NTP: synchronizing...");
+  }
+
+  char warmupLine2[96];
+  snprintf(
+    warmupLine2,
+    sizeof(warmupLine2),
+    "%s\n30 s remaining",
+    ntpLine
+  );
+  dashboardUi.showFullScreenMessage("Warming up SEN66", ipLine.c_str(), warmupLine2);
   logStep(8, "Warmup screen rendered");
   logStep(9, "Initialize sensor");
   initSensor();
@@ -571,9 +748,11 @@ void loop()
 
   displayDriver.loop();
   wifiManagerExt.loop();
+  ensureTimeSync(millis());
   maintainMqttConnection(millis());
   mqttClient.loop();
   updateSensorAndUi();
+  updateMqttStatusFlash(millis());
   delay(5);
 
 }   //   loop()
