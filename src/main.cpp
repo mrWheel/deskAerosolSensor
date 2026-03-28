@@ -1,4 +1,4 @@
-/*** Last Changed: 2026-03-28 - 15:51 ***/
+/*** Last Changed: 2026-03-28 - 15:57 ***/
 #include <Arduino.h>
 #include <Wire.h>
 #include <lvgl.h>
@@ -13,7 +13,7 @@
 #include "sensorReader.h"
 #include "WiFiManagerExt.h"
 
-const char* PROG_VERSION = "v1.0.1";
+const char* PROG_VERSION = "v1.0.2";
 
 //--- Global objects
 static DashboardUi dashboardUi;

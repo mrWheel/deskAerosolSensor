@@ -82,12 +82,13 @@ jobs:
       - name: Get version from ${{ env.PROGRAM_SRC }}
         id: getVersion
         run: |
-          versionLine=$(grep -m1 'PROG_VERSION' ${{ env.PROGRAM_DIR }}/${{ env.PROGRAM_SRC }} || true)
+          sourceFile="${{ env.PROGRAM_DIR }}/${{ env.PROGRAM_SRC }}"
+          versionLine=$(grep -m1 'PROG_VERSION' "$sourceFile" || true)
           version=$(echo "$versionLine" | grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)
           parseError=""
 
           if [ -z "$versionLine" ]; then
-            parseError="No PROG_VERSION line found in ${{ env.PROGRAM_DIR }}/${{ env.PROGRAM_SRC }}."
+            parseError="No PROG_VERSION line found in $sourceFile."
           elif [ -z "$version" ]; then
             parseError="PROG_VERSION line found, but no semantic version (vX.Y.Z) was detected."
           fi
