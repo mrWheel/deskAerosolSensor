@@ -64,20 +64,20 @@ float computeNoxBadness(float value)
 
 }   //   computeNoxBadness()
 
-//--- Approximate comfort badness for indoor temperature
+//--- Temperature color ramp: <=10C blue, 10..25C to red, >=25C full red
 float computeTemperatureBadness(float value)
 {
-  if (value < 21.0f)
+  if (value <= 10.0f)
   {
-    return mapRangeClamped(21.0f - value, 0.0f, 6.0f);
+    return 0.0f;
   }
 
-  if (value > 24.0f)
+  if (value >= 25.0f)
   {
-    return mapRangeClamped(value - 24.0f, 0.0f, 8.0f);
+    return 1.0f;
   }
 
-  return 0.0f;
+  return mapRangeClamped(value, 10.0f, 25.0f);
 
 }   //   computeTemperatureBadness()
 

@@ -129,30 +129,36 @@ void DashboardUi::createHeader()
   lv_obj_set_style_pad_right(header, 10, 0);
   lv_obj_set_style_pad_top(header, 6, 0);
   lv_obj_set_style_pad_bottom(header, 6, 0);
-  lv_obj_set_layout(header, LV_LAYOUT_FLEX);
-  lv_obj_set_flex_flow(header, LV_FLEX_FLOW_ROW);
-  lv_obj_set_flex_align(header, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_layout(header, 0);
 
   titleLabel = lv_label_create(header);
   lv_label_set_text(titleLabel, "Indoor Air");
+  lv_obj_align(titleLabel, LV_ALIGN_LEFT_MID, 0, 0);
   lv_obj_set_style_text_font(titleLabel, &lv_font_montserrat_18, 0);
   lv_obj_set_style_text_color(titleLabel, lv_color_hex(0xE2E8F0), 0);
 
   lv_obj_t* rightGroup = lv_obj_create(header);
+  lv_obj_set_size(rightGroup, 190, 30);
+  lv_obj_align(rightGroup, LV_ALIGN_RIGHT_MID, -6, -2);
   lv_obj_set_style_bg_opa(rightGroup, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(rightGroup, 0, 0);
   lv_obj_set_style_pad_all(rightGroup, 0, 0);
+  lv_obj_set_style_pad_row(rightGroup, 0, 0);
   lv_obj_set_layout(rightGroup, LV_LAYOUT_FLEX);
   lv_obj_set_flex_flow(rightGroup, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_flex_align(rightGroup, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_flex_align(rightGroup, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
 
   statusLabel = lv_label_create(rightGroup);
   lv_label_set_text(statusLabel, "Booting");
+  lv_obj_set_width(statusLabel, lv_pct(100));
+  lv_obj_set_style_text_align(statusLabel, LV_TEXT_ALIGN_LEFT, 0);
   lv_obj_set_style_text_font(statusLabel, &lv_font_montserrat_14, 0);
   lv_obj_set_style_text_color(statusLabel, lv_color_hex(0x93C5FD), 0);
 
   lastUpdateLabel = lv_label_create(rightGroup);
   lv_label_set_text(lastUpdateLabel, "Waiting");
+  lv_obj_set_width(lastUpdateLabel, lv_pct(100));
+  lv_obj_set_style_text_align(lastUpdateLabel, LV_TEXT_ALIGN_LEFT, 0);
   lv_obj_set_style_text_font(lastUpdateLabel, &lv_font_montserrat_12, 0);
   lv_obj_set_style_text_color(lastUpdateLabel, lv_color_hex(0x94A3B8), 0);
 
@@ -258,17 +264,21 @@ void DashboardUi::setTileValue(
   float badness
 )
 {
+  const lv_color_t valueColor = badnessToColor(badness);
   lv_label_set_text(tile.valueLabel, valueText);
   lv_label_set_text(tile.unitLabel, unitText);
-  lv_obj_set_style_text_color(tile.valueLabel, badnessToColor(badness), 0);
+  lv_obj_set_style_text_color(tile.valueLabel, valueColor, 0);
+  lv_obj_set_style_bg_color(tile.card, valueColor, LV_PART_SCROLLBAR);
 
 }   //   setTileValue()
 
 //--- Write a placeholder value into a tile
 void DashboardUi::setTilePlaceholder(Tile& tile, const char* text, const char* unitText)
 {
+  const lv_color_t placeholderColor = lv_color_hex(0x60A5FA);
   lv_label_set_text(tile.valueLabel, text);
   lv_label_set_text(tile.unitLabel, unitText);
-  lv_obj_set_style_text_color(tile.valueLabel, lv_color_hex(0x60A5FA), 0);
+  lv_obj_set_style_text_color(tile.valueLabel, placeholderColor, 0);
+  lv_obj_set_style_bg_color(tile.card, placeholderColor, LV_PART_SCROLLBAR);
 
 }   //   setTilePlaceholder()
