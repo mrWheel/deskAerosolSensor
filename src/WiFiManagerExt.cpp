@@ -1,3 +1,4 @@
+/*** Last Changed: 2026-03-29 - 12:49 ***/
 #include "WiFiManagerExt.h"
 
 #include <WiFi.h>
@@ -8,10 +9,31 @@ WiFiManagerExt* WiFiManagerExt::self = nullptr;
 
 namespace
 {
-  constexpr const char* kNamespace = "mqttcfg";
-  constexpr uint32_t kPortalTimeoutSeconds = 300;
-  constexpr uint32_t kResetHoldMs = 10000;
+constexpr const char* kNamespace = "mqttcfg";
+constexpr uint32_t kPortalTimeoutSeconds = 300;
+constexpr uint32_t kResetHoldMs = 10000;
+
+void buildDasMacName(char* outBuf, const size_t outBufSize)
+{
+  uint8_t mac[6] = {0};
+  WiFi.macAddress(mac);
+
+  snprintf(
+      outBuf,
+      outBufSize,
+      "DAS-%02x-%02x-%02x",
+      static_cast<unsigned int>(mac[3]),
+      static_cast<unsigned int>(mac[4]),
+      static_cast<unsigned int>(mac[5]));
 }
+
+void buildDasMacTopic(char* outBuf, const size_t outBufSize)
+{
+  char apName[32] = {0};
+  buildDasMacName(apName, sizeof(apName));
+  snprintf(outBuf, outBufSize, "%s/data", apName);
+}
+} // namespace
 
 WiFiManagerExt::WiFiManagerExt()
 {
@@ -31,9 +53,7 @@ bool WiFiManagerExt::beginAndConnect()
   wifiManager.setConfigPortalTimeout(kPortalTimeoutSeconds);
   wifiManager.setSaveParamsCallback(onSaveParams);
   wifiManager.setAPCallback([](WiFiManager*)
-  {
-    onConfigPortalStarted();
-  });
+                            { onConfigPortalStarted(); });
 
   WiFiManagerParameter mqttBrokerParam("mqtt_broker", "MQTT broker URL", brokerBuf, sizeof(brokerBuf));
   WiFiManagerParameter mqttUserParam("mqtt_user", "MQTT username", userBuf, sizeof(userBuf));
@@ -160,11 +180,20 @@ void WiFiManagerExt::loadMqttConfig()
   Preferences preferences;
   preferences.begin(kNamespace, true);
 
+  char defaultTopic[40] = {0};
+  buildDasMacTopic(defaultTopic, sizeof(defaultTopic));
+
   config.brokerUrl = preferences.getString("broker", "");
   config.username = preferences.getString("user", "");
   config.password = preferences.getString("pass", "");
   config.brokerPort = static_cast<uint16_t>(preferences.getUInt("port", 1883));
-  config.topic = preferences.getString("topic", "deskAerosolSensor/data");
+  config.topic = preferences.getString("topic", defaultTopic);
+
+  if (config.topic.length() == 0)
+  {
+    config.topic = defaultTopic;
+  }
+
   config.publishIntervalMs = preferences.getUInt("interval", 5000);
 
   preferences.end();
@@ -187,18 +216,8 @@ void WiFiManagerExt::saveMqttConfig()
 
 String WiFiManagerExt::buildPortalSsid() const
 {
-  uint8_t mac[6] = {0};
-  WiFi.macAddress(mac);
-
   char apName[32];
-  snprintf(
-    apName,
-    sizeof(apName),
-    "DAS-%02x-%02x-%02x",
-    static_cast<unsigned int>(mac[3]),
-    static_cast<unsigned int>(mac[4]),
-    static_cast<unsigned int>(mac[5])
-  );
+  buildDasMacName(apName, sizeof(apName));
 
   return String(apName);
 }
@@ -241,13 +260,13 @@ void WiFiManagerExt::onConfigPortalStarted()
   }
 
   Serial.println("WiFi portal started");
-  Serial.print("Connect to SSID: ");
-  Serial.println(self->portalSsid);
+  Serial.printf("Connect to SSID: %s\n", self->portalSsid.c_str());
 
   if (self->portalStatusCallback != nullptr)
   {
-    String detail = String("Connect to ") + self->portalSsid;
-    self->portalStatusCallback("WiFi portal started", detail.c_str());
+    char detail[64] = {0};
+    snprintf(detail, sizeof(detail), "Connect to %s", self->portalSsid.c_str());
+    self->portalStatusCallback("WiFi portal started", detail);
   }
 }
 

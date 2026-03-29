@@ -1,16 +1,22 @@
 # SEN66 Dashboard for CYD ILI9341
 
-<img src="Documents/Sensirion-SEN66.png" width="350">
+<div align="center">
+<img src="assets/Sensirion-SEN66.png" width="350" align="center">
+</div>
 
 This PlatformIO project targets a CYD style ESP32 board with an ILI9341 display and a 3x3 LVGL dashboard.
 
-<img src="Documents/liveScreen.png" width="250">
+<div align="center">
+<img src="assets/liveScreen.png" width="500">
+</div>
 
 ## Included environments
 
 - `cyd_ili9341`
 
-<img src="Documents/ili9341_ESP32_Board.png" width="250">
+<div align="center">
+<img src="assets/ili9341_ESP32_Board.png" width="500">
+</div>
 
   - Main runtime environment for ILI9341
   - Uses the calibrated display configuration
@@ -41,7 +47,9 @@ Default I2C pins in `cyd_ili9341`:
 - SEN66 SDA -> GPIO27
 - SEN66 SCL -> GPIO22
 
-<img src="Documents/ili9341_ESP32_Board_I2C_Pinout.png" width="250">
+<div align="center">
+<img src="assets/ili9341_ESP32_Board_I2C_Pinout.png" width="500">
+</div>
 
 Important: on the ILI9341 variant, using GPIO21 for SDA conflicts with the display backlight pin and can make the screen appear black.
 
@@ -78,7 +86,7 @@ At startup the device first tries stored WiFi credentials. If no credentials are
 
 When the portal starts, the UI and serial output show the AP name to connect to:
 
-- `DTS-a1-2b-3c`
+- `DAS-a1-2b-3c`
 
 Where `a1`, `2b`, and `3c` are the last three bytes of the ESP32 MAC address.
 
@@ -93,7 +101,7 @@ Portal fields:
 - MQTT username (optional)
 - MQTT password (optional)
 - MQTT broker port (`1883` for plain MQTT, `8883` for TLS)
-- MQTT topic
+- MQTT topic (default: AP name + `/data`, for example `DAS-a1-2b-3c/data`)
 - MQTT publish interval (ms)
 
 ```
@@ -102,6 +110,7 @@ Portal fields:
 {"pm1_0":0.6,"pm2_5":1.0,"pm4_0":1.3,"pm10":1.5,"humidity":52.6,"temperature":17.6,"voc":68,"nox":1,"co2":1367,"timeStamp":"2026-03-28T15:25:01+0100"}
 ```
 These values are persisted and shown again as defaults in the portal.
+If no topic was saved yet, or the saved topic is empty, the default topic is `DAS-xx-yy-zz/data` based on the last three MAC bytes.
 
 If GPIO0 is held low for longer than 10 seconds, stored WiFi settings are cleared and the device restarts (`ESP.restart()`).
 
