@@ -1,3 +1,4 @@
+/*** Last Changed: 2026-03-29 - 13:32 ***/
 #include "colorScale.h"
 
 //--- Clamp floating point value to the range 0.0 .. 1.0
@@ -15,7 +16,7 @@ float clamp01(float value)
 
   return value;
 
-}   //   clamp01()
+} //   clamp01()
 
 //--- Map a value from an input range to 0.0 .. 1.0 and clamp it
 float mapRangeClamped(float value, float inMin, float inMax)
@@ -27,42 +28,42 @@ float mapRangeClamped(float value, float inMin, float inMax)
 
   return clamp01((value - inMin) / (inMax - inMin));
 
-}   //   mapRangeClamped()
+} //   mapRangeClamped()
 
 //--- Approximate badness for PM1.0 / PM2.5 / PM4.0
 float computePmBadness(float value)
 {
   return mapRangeClamped(value, 0.0f, 55.4f);
 
-}   //   computePmBadness()
+} //   computePmBadness()
 
 //--- Approximate badness for PM10
 float computePm10Badness(float value)
 {
   return mapRangeClamped(value, 0.0f, 154.0f);
 
-}   //   computePm10Badness()
+} //   computePm10Badness()
 
 //--- Approximate indoor ventilation badness for CO2
 float computeCo2Badness(float value)
 {
   return mapRangeClamped(value, 600.0f, 2000.0f);
 
-}   //   computeCo2Badness()
+} //   computeCo2Badness()
 
 //--- Approximate relative badness for the Sensirion VOC index
 float computeVocBadness(float value)
 {
   return mapRangeClamped(value, 100.0f, 400.0f);
 
-}   //   computeVocBadness()
+} //   computeVocBadness()
 
 //--- Approximate relative badness for the Sensirion NOx index
 float computeNoxBadness(float value)
 {
   return mapRangeClamped(value, 1.0f, 300.0f);
 
-}   //   computeNoxBadness()
+} //   computeNoxBadness()
 
 //--- Temperature color ramp: <=10C blue, 10..25C to red, >=25C full red
 float computeTemperatureBadness(float value)
@@ -79,7 +80,7 @@ float computeTemperatureBadness(float value)
 
   return mapRangeClamped(value, 10.0f, 25.0f);
 
-}   //   computeTemperatureBadness()
+} //   computeTemperatureBadness()
 
 //--- Approximate comfort badness for indoor humidity
 float computeHumidityBadness(float value)
@@ -96,17 +97,32 @@ float computeHumidityBadness(float value)
 
   return 0.0f;
 
-}   //   computeHumidityBadness()
+} //   computeHumidityBadness()
 
 //--- Convert a badness score to a blue -> red color gradient
 lv_color_t badnessToColor(float badness)
 {
   badness = clamp01(badness);
 
-  const uint8_t red = static_cast<uint8_t>(60.0f + (195.0f * badness));
-  const uint8_t green = static_cast<uint8_t>(180.0f - (140.0f * badness));
-  const uint8_t blue = static_cast<uint8_t>(255.0f - (225.0f * badness));
+  uint8_t red = 0;
+  uint8_t green = 0;
+  uint8_t blue = 0;
+
+  if (badness < 0.5f)
+  {
+    const float t = badness / 0.5f;
+    red = static_cast<uint8_t>(34.0f + ((250.0f - 34.0f) * t));
+    green = static_cast<uint8_t>(211.0f + ((204.0f - 211.0f) * t));
+    blue = static_cast<uint8_t>(238.0f + ((21.0f - 238.0f) * t));
+  }
+  else
+  {
+    const float t = (badness - 0.5f) / 0.5f;
+    red = static_cast<uint8_t>(250.0f + ((239.0f - 250.0f) * t));
+    green = static_cast<uint8_t>(204.0f + ((68.0f - 204.0f) * t));
+    blue = static_cast<uint8_t>(21.0f + ((68.0f - 21.0f) * t));
+  }
 
   return lv_color_make(red, green, blue);
 
-}   //   badnessToColor()
+} //   badnessToColor()

@@ -1,4 +1,4 @@
-/*** Last Changed: 2026-03-29 - 12:49 ***/
+/*** Last Changed: 2026-03-29 - 13:32 ***/
 #include <Arduino.h>
 #include <Wire.h>
 #include <lvgl.h>
@@ -13,7 +13,7 @@
 #include "sensorReader.h"
 #include "WiFiManagerExt.h"
 
-const char* PROG_VERSION = "v1.0.4";
+const char* PROG_VERSION = "v1.0.5";
 
 //--- Global objects
 static DashboardUi dashboardUi;
@@ -41,6 +41,24 @@ static bool timeSynced = false;
 static WiFiClient mqttClientPlain;
 static WiFiClientSecure mqttClientSecure;
 static PubSubClient mqttClient(mqttClientPlain);
+
+static void updateLastUpdateText(uint32_t ageMs);
+
+//--- Keep the initialization header status and time up to date
+static void refreshInitializationHeader()
+{
+  dashboardUi.setStatusText("Initialisation");
+  updateLastUpdateText(0);
+
+} //   refreshInitializationHeader()
+
+//--- Show an initialization status screen below the persistent header
+static void showInitializationScreen(const char* titleText, const char* line1Text, const char* line2Text)
+{
+  refreshInitializationHeader();
+  dashboardUi.showFullScreenMessage(titleText, line1Text, line2Text);
+
+} //   showInitializationScreen()
 
 //--- Try to synchronize ESP32 clock over NTP while WiFi is connected
 static bool syncTimeFromNtp()
@@ -120,7 +138,7 @@ static void onPortalStatus(const char* statusText, const char* detailText)
 {
   const bool portalActive = (statusText != nullptr) && (strstr(statusText, "portal") != nullptr);
   const char* line2 = portalActive ? "Open 192.168.4.1 for portal" : "";
-  dashboardUi.showFullScreenMessage(statusText, detailText, line2);
+  showInitializationScreen(statusText, detailText, line2);
   displayDriver.loop();
   delay(20);
 }
@@ -128,10 +146,11 @@ static void onPortalStatus(const char* statusText, const char* detailText)
 //--- Keep LVGL active while a full-screen status message should remain visible
 static void showTransientStatusScreen(const char* titleText, const char* line1Text, const char* line2Text, uint32_t holdMs)
 {
-  dashboardUi.showFullScreenMessage(titleText, line1Text, line2Text);
+  showInitializationScreen(titleText, line1Text, line2Text);
   const uint32_t startMs = millis();
   while ((millis() - startMs) < holdMs)
   {
+    refreshInitializationHeader();
     displayDriver.loop();
     wifiManagerExt.loop();
     delay(5);
@@ -282,12 +301,12 @@ static void publishMqttSampleIfDue(const SensorData& data, uint32_t now)
 static bool initConnectivity()
 {
   wifiManagerExt.setPortalStatusCallback(onPortalStatus);
-  dashboardUi.showFullScreenMessage("WiFi setup", "Trying saved credentials...", "");
+  showInitializationScreen("WiFi setup", "Trying saved credentials...", "");
   displayDriver.loop();
 
   if (!wifiManagerExt.beginAndConnect())
   {
-    dashboardUi.showFullScreenMessage("WiFi failed", "No credentials or no AP connection", "Portal timeout after 5 minutes");
+    showInitializationScreen("WiFi failed", "No credentials or no AP connection", "Portal timeout after 5 minutes");
     mqttEnabled = false;
     return false;
   }
@@ -297,7 +316,7 @@ static bool initConnectivity()
 
   char line2[128];
   snprintf(line2, sizeof(line2), "IP: %s\nNTP: synchronizing...", ipOnly.c_str());
-  dashboardUi.showFullScreenMessage("WiFi connected", hostName.c_str(), line2);
+  showInitializationScreen("WiFi connected", hostName.c_str(), line2);
   displayDriver.loop();
 
   syncTimeFromNtp();
@@ -318,7 +337,11 @@ static bool initConnectivity()
 
   if (!mqttConfigValid)
   {
-    dashboardUi.showFullScreenMessage("WiFi only mode", "MQTT is not configured", "Sensor dashboard will continue");
+    Serial.printf(
+        "MQTT disabled: brokerLen=%u topicLen=%u\n",
+        static_cast<unsigned int>(cfg.brokerUrl.length()),
+        static_cast<unsigned int>(cfg.topic.length()));
+    showInitializationScreen("WiFi only mode", "MQTT is not configured", "Sensor dashboard will continue");
     displayDriver.loop();
     mqttEnabled = false;
     return true;
@@ -539,7 +562,7 @@ static void updateSensorAndUi()
         "%s\n30 s remaining",
         ntpLine);
 
-    dashboardUi.showFullScreenMessage("Warming up SEN66", ipLine.c_str(), line2);
+    showInitializationScreen("Warming up SEN66", ipLine.c_str(), line2);
     Serial.println("SEN66 connected after retry");
     return;
   }
@@ -571,7 +594,7 @@ static void updateSensorAndUi()
         "%s\n%lu s remaining",
         ntpLine,
         static_cast<unsigned long>(remainingSec));
-    dashboardUi.showFullScreenMessage("Warming up SEN66", ipLine.c_str(), line2);
+    showInitializationScreen("Warming up SEN66", ipLine.c_str(), line2);
     return;
   }
 
@@ -683,7 +706,7 @@ void setup()
 #endif
 
   logStep(5, "Mode FULL_RUNTIME");
-  dashboardUi.showFullScreenMessage("Starting", "Preparing connectivity...", "");
+  showInitializationScreen("Starting", "Preparing connectivity...", "");
   logStep(6, "WiFi status screen rendered");
   logStep(7, "Initialize WiFi + MQTT");
   wifiReady = initConnectivity();
@@ -713,7 +736,7 @@ void setup()
       sizeof(warmupLine2),
       "%s\n30 s remaining",
       ntpLine);
-  dashboardUi.showFullScreenMessage("Warming up SEN66", ipLine.c_str(), warmupLine2);
+  showInitializationScreen("Warming up SEN66", ipLine.c_str(), warmupLine2);
   logStep(8, "Warmup screen rendered");
   logStep(9, "Initialize sensor");
   initSensor();

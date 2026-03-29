@@ -1,3 +1,4 @@
+/*** Last Changed: 2026-03-29 - 13:32 ***/
 #include "dashboardUi.h"
 #include "colorScale.h"
 
@@ -6,7 +7,7 @@ void DashboardUi::begin()
 {
   screen = lv_scr_act();
 
-  lv_obj_set_style_bg_color(screen, lv_color_hex(0x0B1020), 0);
+  lv_obj_set_style_bg_color(screen, lv_color_hex(0x000000), 0);
   lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
   lv_obj_set_style_pad_all(screen, 0, 0);
 
@@ -14,14 +15,14 @@ void DashboardUi::begin()
   createGrid();
   showBooting();
 
-}   //   begin()
+} //   begin()
 
 //--- Show a booting state before the first valid sample arrives
 void DashboardUi::showBooting()
 {
   hideFullScreenMessage();
 
-  setStatusText("Starting sensor...");
+  setStatusText("Initialisation");
   setLastUpdateText("Waiting for first sample");
 
   setTilePlaceholder(tilePm1, "--", "ug/m3");
@@ -34,16 +35,11 @@ void DashboardUi::showBooting()
   setTilePlaceholder(tileVoc, "--", "index");
   setTilePlaceholder(tileNox, "--", "index");
 
-}   //   showBooting()
+} //   showBooting()
 
 //--- Show a full-screen status panel and hide the tile dashboard
 void DashboardUi::showFullScreenMessage(const char* titleText, const char* line1Text, const char* line2Text)
 {
-  if (header != nullptr)
-  {
-    lv_obj_add_flag(header, LV_OBJ_FLAG_HIDDEN);
-  }
-
   if (grid != nullptr)
   {
     lv_obj_add_flag(grid, LV_OBJ_FLAG_HIDDEN);
@@ -52,15 +48,15 @@ void DashboardUi::showFullScreenMessage(const char* titleText, const char* line1
   if (fullScreenLayer == nullptr)
   {
     fullScreenLayer = lv_obj_create(screen);
-    lv_obj_set_size(fullScreenLayer, lv_pct(100), lv_pct(100));
-    lv_obj_align(fullScreenLayer, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_size(fullScreenLayer, lv_pct(100), 198);
+    lv_obj_align(fullScreenLayer, LV_ALIGN_TOP_MID, 0, 42);
     lv_obj_set_style_radius(fullScreenLayer, 0, 0);
     lv_obj_set_style_border_width(fullScreenLayer, 0, 0);
-    lv_obj_set_style_bg_color(fullScreenLayer, lv_color_hex(0x0B1020), 0);
+    lv_obj_set_style_bg_color(fullScreenLayer, lv_color_hex(0x000000), 0);
     lv_obj_set_style_bg_opa(fullScreenLayer, LV_OPA_COVER, 0);
     lv_obj_set_style_pad_left(fullScreenLayer, 14, 0);
     lv_obj_set_style_pad_right(fullScreenLayer, 14, 0);
-    lv_obj_set_style_pad_top(fullScreenLayer, 16, 0);
+    lv_obj_set_style_pad_top(fullScreenLayer, 18, 0);
     lv_obj_set_style_pad_bottom(fullScreenLayer, 16, 0);
     lv_obj_set_layout(fullScreenLayer, LV_LAYOUT_FLEX);
     lv_obj_set_flex_flow(fullScreenLayer, LV_FLEX_FLOW_COLUMN);
@@ -85,6 +81,18 @@ void DashboardUi::showFullScreenMessage(const char* titleText, const char* line1
     lv_obj_set_style_text_color(fullScreenLine2, lv_color_hex(0x94A3B8), 0);
   }
 
+  if (header != nullptr)
+  {
+    lv_obj_clear_flag(header, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(header);
+  }
+
+  if (titleLabel != nullptr)
+  {
+    lv_label_set_text(titleLabel, "Indoor Air");
+  }
+
+  setStatusText("Initialisation");
   lv_obj_clear_flag(fullScreenLayer, LV_OBJ_FLAG_HIDDEN);
   lv_label_set_text(fullScreenTitle, titleText != nullptr ? titleText : "");
   lv_label_set_text(fullScreenLine1, line1Text != nullptr ? line1Text : "");
@@ -145,14 +153,14 @@ void DashboardUi::showSensorData(const SensorData& data)
   snprintf(buf, sizeof(buf), "%.0f", data.noxIndex);
   setTileValue(tileNox, buf, "index", computeNoxBadness(data.noxIndex));
 
-}   //   showSensorData()
+} //   showSensorData()
 
 //--- Show a temporary read error without destroying the current values
 void DashboardUi::showReadError(const char* errorText)
 {
   setStatusText(errorText);
 
-}   //   showReadError()
+} //   showReadError()
 
 //--- Show a sensor communication error on all tiles
 void DashboardUi::showSensorError(const char* errorText)
@@ -161,17 +169,17 @@ void DashboardUi::showSensorError(const char* errorText)
   setStatusText(errorText);
 
   const float maxBadness = 1.0f;
-  setTileValue(tilePm1,  "ERR", "", maxBadness);
+  setTileValue(tilePm1, "ERR", "", maxBadness);
   setTileValue(tilePm25, "ERR", "", maxBadness);
-  setTileValue(tilePm4,  "ERR", "", maxBadness);
+  setTileValue(tilePm4, "ERR", "", maxBadness);
   setTileValue(tilePm10, "ERR", "", maxBadness);
   setTileValue(tileTemp, "ERR", "", maxBadness);
-  setTileValue(tileRh,   "ERR", "", maxBadness);
-  setTileValue(tileCo2,  "ERR", "", maxBadness);
-  setTileValue(tileVoc,  "ERR", "", maxBadness);
-  setTileValue(tileNox,  "ERR", "", maxBadness);
+  setTileValue(tileRh, "ERR", "", maxBadness);
+  setTileValue(tileCo2, "ERR", "", maxBadness);
+  setTileValue(tileVoc, "ERR", "", maxBadness);
+  setTileValue(tileNox, "ERR", "", maxBadness);
 
-}   //   showSensorError()
+} //   showSensorError()
 
 //--- Update the small status label in the header
 void DashboardUi::setStatusText(const char* statusText)
@@ -181,7 +189,7 @@ void DashboardUi::setStatusText(const char* statusText)
     lv_label_set_text(statusLabel, statusText);
   }
 
-}   //   setStatusText()
+} //   setStatusText()
 
 //--- Show/hide right-aligned MQTT indicator in the header
 void DashboardUi::setMqttIndicator(bool visible)
@@ -193,7 +201,7 @@ void DashboardUi::setMqttIndicator(bool visible)
 
   lv_label_set_text(mqttLabel, visible ? "MQTT" : "");
 
-}   //   setMqttIndicator()
+} //   setMqttIndicator()
 
 //--- Update the last-update label in the header
 void DashboardUi::setLastUpdateText(const char* updateText)
@@ -203,7 +211,7 @@ void DashboardUi::setLastUpdateText(const char* updateText)
     lv_label_set_text(lastUpdateLabel, updateText);
   }
 
-}   //   setLastUpdateText()
+} //   setLastUpdateText()
 
 //--- Build the compact header bar
 void DashboardUi::createHeader()
@@ -213,7 +221,7 @@ void DashboardUi::createHeader()
   lv_obj_align(header, LV_ALIGN_TOP_MID, 0, 0);
   lv_obj_set_style_radius(header, 0, 0);
   lv_obj_set_style_border_width(header, 0, 0);
-  lv_obj_set_style_bg_color(header, lv_color_hex(0x111827), 0);
+  lv_obj_set_style_bg_color(header, lv_color_hex(0x0B1220), 0);
   lv_obj_set_style_bg_opa(header, LV_OPA_COVER, 0);
   lv_obj_set_style_pad_left(header, 10, 0);
   lv_obj_set_style_pad_right(header, 10, 0);
@@ -223,13 +231,13 @@ void DashboardUi::createHeader()
   lv_obj_set_layout(header, 0);
 
   titleLabel = lv_label_create(header);
-  lv_label_set_text(titleLabel, "Indoor Air");
+  lv_label_set_text(titleLabel, "Indoor Air Sensor");
   lv_obj_align(titleLabel, LV_ALIGN_LEFT_MID, 0, 0);
-  lv_obj_set_style_text_font(titleLabel, &lv_font_montserrat_18, 0);
+  lv_obj_set_style_text_font(titleLabel, &lv_font_montserrat_16, 0);
   lv_obj_set_style_text_color(titleLabel, lv_color_hex(0xE2E8F0), 0);
 
   lv_obj_t* rightGroup = lv_obj_create(header);
-  lv_obj_set_size(rightGroup, 190, 30);
+  lv_obj_set_size(rightGroup, 172, 30);
   lv_obj_align(rightGroup, LV_ALIGN_RIGHT_MID, -6, -2);
   lv_obj_set_style_bg_opa(rightGroup, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(rightGroup, 0, 0);
@@ -247,7 +255,7 @@ void DashboardUi::createHeader()
   lv_obj_set_layout(statusTopRow, 0);
 
   statusLabel = lv_label_create(statusTopRow);
-  lv_label_set_text(statusLabel, "Booting");
+  lv_label_set_text(statusLabel, "Initialisation");
   lv_obj_align(statusLabel, LV_ALIGN_LEFT_MID, 0, 0);
   lv_obj_set_style_text_align(statusLabel, LV_TEXT_ALIGN_LEFT, 0);
   lv_obj_set_style_text_font(statusLabel, &lv_font_montserrat_14, 0);
@@ -268,26 +276,24 @@ void DashboardUi::createHeader()
   lv_obj_set_style_text_font(lastUpdateLabel, &lv_font_montserrat_12, 0);
   lv_obj_set_style_text_color(lastUpdateLabel, lv_color_hex(0x94A3B8), 0);
 
-}   //   createHeader()
+} //   createHeader()
 
 //--- Build the 3 x 3 tile grid
 void DashboardUi::createGrid()
 {
   static lv_coord_t columnDescriptor[] =
-  {
-    LV_GRID_FR(1),
-    LV_GRID_FR(1),
-    LV_GRID_FR(1),
-    LV_GRID_TEMPLATE_LAST
-  };
+      {
+          LV_GRID_FR(1),
+          LV_GRID_FR(1),
+          LV_GRID_FR(1),
+          LV_GRID_TEMPLATE_LAST};
 
   static lv_coord_t rowDescriptor[] =
-  {
-    LV_GRID_FR(1),
-    LV_GRID_FR(1),
-    LV_GRID_FR(1),
-    LV_GRID_TEMPLATE_LAST
-  };
+      {
+          LV_GRID_FR(1),
+          LV_GRID_FR(1),
+          LV_GRID_FR(1),
+          LV_GRID_TEMPLATE_LAST};
 
   grid = lv_obj_create(screen);
   lv_obj_set_size(grid, lv_pct(100), 190);
@@ -316,26 +322,24 @@ void DashboardUi::createGrid()
   createTile(tileRh, "Hum", 1, 2);
   createTile(tileNox, "NOx", 2, 2);
 
-}   //   createGrid()
+} //   createGrid()
 
 //--- Create one metric tile
 void DashboardUi::createTile(
-  Tile& tile,
-  const char* titleText,
-  uint8_t col,
-  uint8_t row
-)
+    Tile& tile,
+    const char* titleText,
+    uint8_t col,
+    uint8_t row)
 {
   tile.card = lv_obj_create(grid);
   lv_obj_set_grid_cell(
-    tile.card,
-    LV_GRID_ALIGN_STRETCH, col, 1,
-    LV_GRID_ALIGN_STRETCH, row, 1
-  );
+      tile.card,
+      LV_GRID_ALIGN_STRETCH, col, 1,
+      LV_GRID_ALIGN_STRETCH, row, 1);
   lv_obj_set_style_radius(tile.card, 12, 0);
   lv_obj_set_style_border_width(tile.card, 1, 0);
-  lv_obj_set_style_border_color(tile.card, lv_color_hex(0x334155), 0);
-  lv_obj_set_style_bg_color(tile.card, lv_color_hex(0x111827), 0);
+  lv_obj_set_style_border_color(tile.card, lv_color_hex(0x475569), 0);
+  lv_obj_set_style_bg_color(tile.card, lv_color_hex(0x0B1220), 0);
   lv_obj_set_style_bg_opa(tile.card, LV_OPA_COVER, 0);
   lv_obj_set_style_pad_left(tile.card, 8, 0);
   lv_obj_set_style_pad_right(tile.card, 8, 0);
@@ -348,7 +352,7 @@ void DashboardUi::createTile(
   tile.titleLabel = lv_label_create(tile.card);
   lv_label_set_text(tile.titleLabel, titleText);
   lv_obj_set_style_text_font(tile.titleLabel, &lv_font_montserrat_14, 0);
-  lv_obj_set_style_text_color(tile.titleLabel, lv_color_hex(0xE2E8F0), 0);
+  lv_obj_set_style_text_color(tile.titleLabel, lv_color_hex(0xF8FAFC), 0);
 
   tile.valueLabel = lv_label_create(tile.card);
   lv_label_set_text(tile.valueLabel, "--");
@@ -358,17 +362,16 @@ void DashboardUi::createTile(
   tile.unitLabel = lv_label_create(tile.card);
   lv_label_set_text(tile.unitLabel, "");
   lv_obj_set_style_text_font(tile.unitLabel, &lv_font_montserrat_12, 0);
-  lv_obj_set_style_text_color(tile.unitLabel, lv_color_hex(0x94A3B8), 0);
+  lv_obj_set_style_text_color(tile.unitLabel, lv_color_hex(0xCBD5E1), 0);
 
-}   //   createTile()
+} //   createTile()
 
 //--- Write a value, unit and color into a tile
 void DashboardUi::setTileValue(
-  Tile& tile,
-  const char* valueText,
-  const char* unitText,
-  float badness
-)
+    Tile& tile,
+    const char* valueText,
+    const char* unitText,
+    float badness)
 {
   const lv_color_t valueColor = badnessToColor(badness);
   lv_label_set_text(tile.valueLabel, valueText);
@@ -376,7 +379,7 @@ void DashboardUi::setTileValue(
   lv_obj_set_style_text_color(tile.valueLabel, valueColor, 0);
   lv_obj_set_style_bg_color(tile.card, valueColor, LV_PART_SCROLLBAR);
 
-}   //   setTileValue()
+} //   setTileValue()
 
 //--- Write a placeholder value into a tile
 void DashboardUi::setTilePlaceholder(Tile& tile, const char* text, const char* unitText)
@@ -387,4 +390,4 @@ void DashboardUi::setTilePlaceholder(Tile& tile, const char* text, const char* u
   lv_obj_set_style_text_color(tile.valueLabel, placeholderColor, 0);
   lv_obj_set_style_bg_color(tile.card, placeholderColor, LV_PART_SCROLLBAR);
 
-}   //   setTilePlaceholder()
+} //   setTilePlaceholder()

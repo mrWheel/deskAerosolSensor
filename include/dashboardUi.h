@@ -1,3 +1,4 @@
+/*** Last Changed: 2026-03-29 - 13:32 ***/
 #pragma once
 
 #include <Arduino.h>
@@ -53,16 +54,14 @@ private:
   void createHeader();
   void createGrid();
   void createTile(
-    Tile& tile,
-    const char* titleText,
-    uint8_t col,
-    uint8_t row
-  );
+      Tile& tile,
+      const char* titleText,
+      uint8_t col,
+      uint8_t row);
   void setTileValue(
-    Tile& tile,
-    const char* valueText,
-    const char* unitText,
-    float badness
-  );
+      Tile& tile,
+      const char* valueText,
+      const char* unitText,
+      float badness);
   void setTilePlaceholder(Tile& tile, const char* text, const char* unitText);
 };

@@ -1,4 +1,4 @@
-/*** Last Changed: 2026-03-29 - 12:49 ***/
+/*** Last Changed: 2026-03-29 - 13:32 ***/
 #include "WiFiManagerExt.h"
 
 #include <WiFi.h>
@@ -32,6 +32,19 @@ void buildDasMacTopic(char* outBuf, const size_t outBufSize)
   char apName[32] = {0};
   buildDasMacName(apName, sizeof(apName));
   snprintf(outBuf, outBufSize, "%s/data", apName);
+}
+
+void applyDefaultTopicIfEmpty(String& topic)
+{
+  if (topic.length() > 0)
+  {
+    return;
+  }
+
+  char defaultTopic[40] = {0};
+  buildDasMacTopic(defaultTopic, sizeof(defaultTopic));
+  topic = defaultTopic;
+  Serial.printf("MQTT topic empty, using default topic: %s\n", defaultTopic);
 }
 } // namespace
 
@@ -94,11 +107,18 @@ bool WiFiManagerExt::beginAndConnect()
   strncpy(topicBuf, mqttTopicParam.getValue(), sizeof(topicBuf) - 1);
   strncpy(intervalBuf, mqttIntervalParam.getValue(), sizeof(intervalBuf) - 1);
 
+  brokerBuf[sizeof(brokerBuf) - 1] = '\0';
+  userBuf[sizeof(userBuf) - 1] = '\0';
+  passBuf[sizeof(passBuf) - 1] = '\0';
+  portBuf[sizeof(portBuf) - 1] = '\0';
+  topicBuf[sizeof(topicBuf) - 1] = '\0';
+  intervalBuf[sizeof(intervalBuf) - 1] = '\0';
+
   readPortalBuffers();
   saveMqttConfig();
 
-  Serial.print("WiFi connected. IP: ");
-  Serial.println(WiFi.localIP());
+  Serial.printf("WiFi connected. IP: %s\n", WiFi.localIP().toString().c_str());
+  Serial.printf("WiFi connected. Hostname: %s\n", portalSsid.c_str());
 
   if (portalStatusCallback != nullptr)
   {
@@ -188,11 +208,7 @@ void WiFiManagerExt::loadMqttConfig()
   config.password = preferences.getString("pass", "");
   config.brokerPort = static_cast<uint16_t>(preferences.getUInt("port", 1883));
   config.topic = preferences.getString("topic", defaultTopic);
-
-  if (config.topic.length() == 0)
-  {
-    config.topic = defaultTopic;
-  }
+  applyDefaultTopicIfEmpty(config.topic);
 
   config.publishIntervalMs = preferences.getUInt("interval", 5000);
 
@@ -238,6 +254,7 @@ void WiFiManagerExt::readPortalBuffers()
   config.username = String(userBuf);
   config.password = String(passBuf);
   config.topic = String(topicBuf);
+  applyDefaultTopicIfEmpty(config.topic);
 
   const long portValue = strtol(portBuf, nullptr, 10);
   if (portValue > 0 && portValue <= 65535)
