@@ -701,7 +701,7 @@ YAPPgenerate();
 
 if (printSwitchExtender)
 {
-  translate([-10, 10, 0])
+  translate([-10, 10, 1])
   {
     cylinder(h=2,  r=2.5,   center=true);
     translate([0,0,30/2]) cylinder(h=30, r=1.4, center=true);
