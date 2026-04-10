@@ -1,0 +1,10 @@
+{
+  "name": "Desktop Aerosol Sensor",
+  "long_name_nl": "Desktop Luchtkwaliteits Meter - een project dat SEN66 luchtkwaliteitsdata uitleest en live toont op een 3x3 LVGL-scherm",
+  "long_name_en": "Desktop Aerosol Sensor - a project that reads SEN66 air-quality data and presents it live on a 3x3 LVGL screen",
+  "description_en": "Firmware for a CYD-style ESP32 with ILI9341 and optional MQTT publishing with NTP timestamps and a real-time 3x3 LVGL dashboard for SEN66 metrics including PM, CO2, VOC, NOx, temperature, and humidity.",
+  "description_nl": "Software voor een CYD-stijl ESP32 met ILI9341 met optionele MQTT-publicatie met NTP-tijdstempels en een realtime 3x3 LVGL-dashboard voor SEN66-metrieken zoals PM, CO2, VOC, NOx, temperatuur en vochtigheid beheert.",
+  "github_url": "https://github.com/mrWheel/",
+  "post_url": "https://willem.aandewiel.nl/",
+  "image": "DLM.png"
+}

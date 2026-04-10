@@ -11,7 +11,7 @@ import os
 import urllib.request
 from pathlib import Path
 
-scriptVersion = "v2.1 (2026-02-28)"
+scriptVersion = "v2.2 (2026-04-13)"
 defaultAwsServer = "admin@aandewiel.nl"
 defaultAwsTarget = "/home/admin/flasherWebsite_v3"
 defaultAwsSshKey = "~/.ssh/LightsailDefaultKey-eu-central-1.pem"
@@ -402,6 +402,10 @@ def parseEnvs(platformioIni: Path) -> list[str]:
             seen.add(env)
 
     return uniqueEnvs
+
+
+def shouldSkipEnv(envName: str) -> bool:
+    return "skip" in envName.lower()
 
 
 def getWorkspaceDir(platformioIni: Path, projectPath: Path) -> Path:
@@ -928,9 +932,17 @@ def main() -> int:
     workspaceDir = getWorkspaceDir(platformioIni, projectPath)
     platformioSections = parsePlatformioSections(platformioIni)
 
-    envs = parseEnvs(platformioIni)
-    if not envs:
+    parsedEnvs = parseEnvs(platformioIni)
+    if not parsedEnvs:
         raise SystemExit("No [env:...] sections found in platformio.ini")
+
+    skippedEnvs = [env for env in parsedEnvs if shouldSkipEnv(env)]
+    envs = [env for env in parsedEnvs if not shouldSkipEnv(env)]
+    if not envs:
+        raise SystemExit(
+            "All environments were skipped because their names contain 'skip'. "
+            "Rename at least one [env:...] section to continue."
+        )
 
     envBoardMap: dict[str, str] = {}
     envSocMap: dict[str, str] = {}
@@ -959,6 +971,8 @@ def main() -> int:
     print(f"Project: {projectName}")
     print(f"Version: {version}")
     print(f"Environments: {', '.join(envs)}")
+    if skippedEnvs:
+        print(f"Skipped environments (name contains 'skip'): {', '.join(skippedEnvs)}")
     print("Boards per environment:")
     for env in envs:
         print(f"  - {env} -> {envBoardMap[env]} ({envSocMap[env]})")

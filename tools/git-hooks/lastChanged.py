@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-#-- Version Date: 10-02-2026 -- (dd-mm-eeyy)
+#-- Version Date: 10-04-2026 -- (dd-mm-eeyy)
 #
 """
 ===============================================================================
@@ -111,6 +111,12 @@ def make_header(now_str: str) -> str:
 # Match alleen als de header echt bovenaan staat (optioneel met UTF-8 BOM)
 HEADER_AT_TOP_RE = re.compile(r"^(?:\ufeff)?/\*\*\*\s*Last Changed: .*?\*\*\*/\s*\n", re.DOTALL)
 
+# Python header rule used in this repository.
+PY_VERSION_DATE_RE = re.compile(
+    r"^(?P<prefix>\s*#--\s*Version Date:\s*)(?P<date>\d{2}-\d{2}-\d{4})(?P<suffix>\s*--\s*\(dd-mm-eeyy\)\s*)$",
+    re.IGNORECASE,
+)
+
 # =========================
 # Git helpers
 # =========================
@@ -124,6 +130,23 @@ def get_repo_root() -> Path:
         print(res.stderr.strip())
         raise SystemExit(1)
     return Path(res.stdout.strip())
+
+
+def get_origin_url() -> str:
+    res = run_git(["config", "--get", "remote.origin.url"])
+    if res.returncode != 0:
+        return ""
+    return (res.stdout or "").strip()
+
+
+def is_template_repo(repo_root: Path) -> bool:
+    if repo_root.name.lower() == "templaterepo":
+        return True
+
+    origin_url = get_origin_url().lower()
+    return origin_url.endswith("/mrwheel/templaterepo") or origin_url.endswith(
+        "/mrwheel/templaterepo.git"
+    )
 
 # =========================
 # Path helpers
@@ -185,11 +208,43 @@ def update_file_header(abs_path: Path, header_line: str) -> bool:
         return True
     return False
 
+
+def update_python_version_date(abs_path: Path, date_str: str) -> bool:
+    """
+    Update '#-- Version Date: dd-mm-yyyy -- (dd-mm-eeyy)' in Python files.
+    Returns True only if a matching line was found and changed.
+    """
+    if not abs_path.exists() or not abs_path.is_file():
+        return False
+
+    original = abs_path.read_text(encoding="utf-8", errors="replace")
+    lines = original.splitlines(keepends=True)
+    changed = False
+
+    for idx, line in enumerate(lines):
+        line_no_nl = line.rstrip("\r\n")
+        match = PY_VERSION_DATE_RE.match(line_no_nl)
+        if not match:
+            continue
+
+        newline = "\n" if line.endswith("\n") else ""
+        replacement = f"{match.group('prefix')}{date_str}{match.group('suffix')}"
+        if replacement != line_no_nl:
+            lines[idx] = replacement + newline
+            changed = True
+        break
+
+    if changed:
+        abs_path.write_text("".join(lines), encoding="utf-8", newline="\n")
+
+    return changed
+
 # =========================
 # Main
 # =========================
 
 repo_root = get_repo_root()
+template_repo = is_template_repo(repo_root)
 
 # Staged files (Added/Copied/Modified)
 res = run_git(["diff", "--cached", "--name-only", "--diff-filter=ACM"])
@@ -214,6 +269,11 @@ staged_h_rel = [
     p for p in staged_rel
     if p.suffix == ".h" and is_under_any_dir(p, H_DIRS)
 ]
+
+# Alleen in templateRepo: update Version Date headers for staged Python files.
+staged_py_rel: List[Path] = []
+if template_repo:
+    staged_py_rel = [p for p in staged_rel if p.suffix == ".py"]
 
 # Propagate: voor elke staged gewijzigde cpp -> include-headers met dezelfde folderstructuur
 propagated_h_rel: List[Path] = []
@@ -248,5 +308,15 @@ for rel_path in targets_rel:
         if add_res.returncode != 0:
             print(add_res.stderr.strip())
             raise SystemExit(1)
+
+if template_repo:
+    date_str = datetime.datetime.now().strftime("%d-%m-%Y")
+    for rel_path in staged_py_rel:
+        abs_path = repo_root / rel_path
+        if update_python_version_date(abs_path, date_str):
+            add_res = run_git(["add", rel_path.as_posix()])
+            if add_res.returncode != 0:
+                print(add_res.stderr.strip())
+                raise SystemExit(1)
 
 raise SystemExit(0)
