@@ -4,10 +4,29 @@
 <img src="assets/Sensirion-SEN66.png" width="350" align="center">
 </div>
 
+## Disclaimer
+This software is developed incrementally. That means I have no clear idea how it works (though it mostly does).
+
+If you have questions about this software, it will probably take you just as long to figure things out as it would take me. So I’d prefer that you investigate it yourself.
+
+Having said that Don’t Even Think About Using It
+
+Seriously. Don’t.
+
+Building this design may injure or kill you during construction, burn your house down while in use, and then—just to be thorough—explode afterward.
+
+This is not a joke. This project involves lethal voltages. If you are not a qualified electronics engineer, close this repository, step away from the soldering iron, and make yourself a cup of tea.
+
+If you decide to ignore all of the above and build it anyway, you do so entirely at your own risk. You are fully responsible for taking proper safety precautions. I take zero responsibility for anything that happens—electrically, mechanically, chemically, spiritually, or otherwise.
+
+Also, full disclosure: I am not a qualified electrical engineer. I provide no guarantees, no warranties, and absolutely no assurance that this design is correct, safe, or suitable for any purpose whatsoever.
+
+## What it is
 This PlatformIO project targets a CYD style ESP32 board with an ILI9341 display and a 3x3 LVGL dashboard.
+A Desktop device that measures and display the air quality in the room.
 
 <div align="center">
-<img src="assets/liveScreen.png" width="500">
+<img src="assets/displayMetingen.png" width="500">
 </div>
 
 ## Included environments
